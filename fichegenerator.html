@@ -180,6 +180,9 @@ async function parsePptx(file){
     slides.push(parseSlideXml(doc, i+1));
   }
   if(!slides.length) throw new Error("Impossible de lire les slides du PPTX.");
+  // Format portrait (ex. A4 21 × 29,7) : typique d'une fiche déjà générée, pas d'un support d'atelier.
+  const sz = presDoc.getElementsByTagName('p:sldSz')[0];
+  slides.portrait = !!sz && Number(sz.getAttribute('cy')) > Number(sz.getAttribute('cx'));
   return slides;
 }
 
@@ -451,6 +454,9 @@ function extractKolb(slidesData, slidesMeta, indices, form){
   const apportPairs = pairs.filter(([,m])=>['contenu','chapitre'].includes(m.role));
   const pratiquePairs = pairs.filter(([,m])=>m.role === 'demo');
 
+  if(!apportPairs.length){
+    throw new Error("Le PPTX ne contient aucune slide d'apport pour l'étape 3 (conceptualisation) : la fiche Kolb ne peut pas être construite sur ce support.");
+  }
   const consigneApp = form.app.trim();
   if(!pratiquePairs.length && !consigneApp){
     throw new Error("Le PPTX ne contient aucune slide d'exercice : renseigne la consigne d'application (étape 4).");
@@ -467,8 +473,7 @@ function extractKolb(slidesData, slidesMeta, indices, form){
     { phase:'Retour collectif', etape:1, min:form.obsMin,
       texte:['Questions posées au groupe :'], puces: form.obs.split('\n').map(s=>s.trim()).filter(Boolean) },
     { phase:'Apport', etape:2, min:sum(apportPairs) || 15,
-      texte: apportPairs.length ? [] : ['Formaliser la méthode vue pendant la mise en situation.'],
-      slides: apportPairs.map(toItem) },
+      texte: [], slides: apportPairs.map(toItem) },
     { phase:'Application', etape:3, min: pratiquePairs.length ? sum(pratiquePairs) : form.appMin,
       texte: consigneApp ? [consigneApp] : [], slides: pratiquePairs.map(toItem) },
     { phase:'Clôture', etape:null, min:10,
@@ -889,6 +894,14 @@ async function handleFile(file){
   try{
     state.slidesData = await parsePptx(file);
     state.meta = analyzeSlides(state.slidesData);
+    const nContenu = state.meta.filter(m=>['contenu','demo','chapitre'].includes(m.role)).length;
+    if(!nContenu){
+      const portrait = state.slidesData.portrait;
+      state.slidesData = null;
+      throw new Error(portrait
+        ? "aucune slide de contenu trouvée. Ce fichier est au format portrait (A4) : il ressemble à une fiche déjà générée, pas à un support d'atelier. Choisis le PPTX utilisé en animation."
+        : "aucune slide de contenu trouvée (les 4 premières et les 2 dernières slides du gabarit sont exclues). Choisis le PPTX utilisé en animation.");
+    }
     state.versions = computeVersions(state.meta);
     renderSummary();
     setStatus('', '');
