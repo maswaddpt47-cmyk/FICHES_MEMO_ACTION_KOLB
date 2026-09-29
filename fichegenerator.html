@@ -353,7 +353,11 @@ function analyzeSlides(slidesData, excludeGabarit){
   slides = postProcessRoles(slides);
   // Partie = suite de slides entre deux séparateurs (slide de section ou de chapitre).
   let part = 0;
-  slides.forEach(s=>{ if(s.role === 'section' || s.role === 'chapitre') part++; s.part = part; });
+  let partTitre = '';
+  slides.forEach(s=>{
+    if(s.role === 'section' || s.role === 'chapitre'){ part++; partTitre = cleanText(s.titre); }
+    s.part = part; s.partTitre = partTitre;
+  });
 
   if(excludeGabarit){
     const total = slides.length;
@@ -572,7 +576,7 @@ function extractMemo(slidesData, slidesMeta, indices){
     if(meta.optionnel) return;
     if(idxSet && !idxSet.has(meta.n)) return;
     const bullets = getMemoBullets(slidesData[i], meta.titre);
-    if(bullets.length) steps.push({ titre: cleanText(meta.titre), bullets });
+    if(bullets.length) steps.push({ titre: cleanText(meta.titre), bullets, partie: meta.partTitre });
   });
 
   const titre = cleanText(getSlideTitle(slidesData[0]));
@@ -603,7 +607,9 @@ function extractKolb(slidesData, slidesMeta, versionKey, form){
   const pairs = slidesData.map((s,i)=>[s, slidesMeta[i]])
     .filter(([,m])=> !m.optionnel && ['contenu','chapitre','demo','etape'].includes(m.role));
 
-  const toItem = ([slide, meta])=>({ titre: cleanText(meta.titre), bullets: getBullets(slide, meta.titre, 2) });
+  const toItem = ([slide, meta])=>({ titre: cleanText(meta.titre), bullets: getBullets(slide, meta.titre, 2), partie: meta.partTitre });
+  // Le surplus est regroupé par partie : « Étape 2 » ou « Conseils et erreurs à éviter » existent dans plusieurs parties.
+  const nomReste = ([,m])=>({ partie: m.partTitre, titre: cleanText(m.titre) });
   const apportPairs = pairs.filter(([,m])=>!PRATIQUE.has(m.role));
   const pratiquePairs = pairs.filter(([,m])=>PRATIQUE.has(m.role));
 
@@ -639,9 +645,9 @@ function extractKolb(slidesData, slidesMeta, versionKey, form){
     { phase:'Retour collectif', etape:1, min:form.obsMin,
       texte:['Questions posées au groupe :'], puces: form.obs.split('\n').map(s=>s.trim()).filter(Boolean) },
     { phase:'Apport', etape:2, min:apportMin,
-      texte:[], slides: apport.keep.map(toItem), reste: apport.rest.map(([,m])=>cleanText(m.titre)) },
+      texte:[], slides: apport.keep.map(toItem), reste: apport.rest.map(nomReste) },
     { phase:'Application', etape:3, min:appMin,
-      texte: consigneApp ? [consigneApp] : [], slides: pratique.keep.map(toItem), reste: pratique.rest.map(([,m])=>cleanText(m.titre)) },
+      texte: consigneApp ? [consigneApp] : [], slides: pratique.keep.map(toItem), reste: pratique.rest.map(nomReste) },
     { phase:'Clôture', etape:null, min:ouverture,
       texte:['Bilan à chaud, réponses aux questions, remise du mémo participant, questionnaire d’évaluation.'] },
   ];
@@ -884,7 +890,9 @@ function buildMemo(data, logos){
   const out = docTitle(`Mon mémo — ${titreDisplay}`, steps.slice(0,3).map(s=>s.titre).join(' | '));
 
   const ws = [800, CW-800];
+  let partie = '';
   steps.forEach((s,i)=>{
+    if(s.partie && s.partie !== partie){ partie = s.partie; out.push(heading(partie, 2)); }
     const [ac, bgc] = i % 2 ? [COLORS.TEA, COLORS.BG_TEA] : [COLORS.BLU, COLORS.BG_BLU];
     out.push(table(ws, [row([
       cell([para(String(i+1), { size:22, bold:true, color:COLORS.WHT, align:D.AlignmentType.CENTER, after:0 })], ws[0], { fill:ac, borders:lineBorders(ac), valign:D.VerticalAlign.CENTER }),
@@ -980,12 +988,23 @@ function buildKolb(data, logos){
       const activite = [];
       p.texte.filter(Boolean).forEach(t=>activite.push(para(t, { size:10, after:40 })));
       (p.puces||[]).forEach(t=>activite.push(bullet(t, { size:10 })));
+      let partie = '';
       (p.slides||[]).forEach(s=>{
+        if(s.partie && s.partie !== partie){
+          partie = s.partie;
+          activite.push(para(partie.toUpperCase(), { size:9, bold:true, color:COLORS.BLU, before:activite.length ? 80 : 0, after:30 }));
+        }
         activite.push(para(s.titre, { size:10, bold:true, after:20 }));
         s.bullets.forEach(b=>activite.push(arrow(b, { size:9.5 })));
       });
       if(p.reste && p.reste.length){
-        activite.push(para(`Si le temps le permet : ${p.reste.join(' · ')}`, { size:9.5, italic:true, color:COLORS.GRY, before:40, after:0 }));
+        activite.push(para('Si le temps le permet :', { size:9.5, italic:true, bold:true, color:COLORS.GRY, before:60, after:20 }));
+        const groupes = [];
+        p.reste.forEach(r=>{
+          const g = groupes[groupes.length-1];
+          if(g && g.partie === r.partie) g.titres.push(r.titre); else groupes.push({ partie:r.partie, titres:[r.titre] });
+        });
+        groupes.forEach(g=>activite.push(para(`${g.partie ? g.partie + ' : ' : ''}${g.titres.join(' · ')}`, { size:9.5, italic:true, color:COLORS.GRY, after:20 })));
       }
       return row([
         cell([para(p.heure, { bold:true, size:10, after:0 })], wd[0]),
