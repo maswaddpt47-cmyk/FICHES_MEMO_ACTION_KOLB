@@ -130,7 +130,7 @@ Qu'avez-vous découvert ?</textarea></div>
     <h2>4. Générer</h2>
     <div class="actions">
       <button class="gen action" id="btn-fiche" disabled>📋 Fiche Action (.docx)</button>
-      <button class="gen memo" id="btn-memo" disabled>📝 Mémo participant (.docx)</button>
+      <button class="gen memo" id="btn-memo" disabled>📝 Mémo participant — complet (.docx)</button>
       <button class="gen kolb" id="btn-kolb" disabled>🔄 Fiche action Kolb (.docx)</button>
     </div>
     <div class="status" id="status"></div>
@@ -296,35 +296,43 @@ function minsLabel(m){
   return `${m} min`;
 }
 
+// Raccourcit une liste de slides (dans l'ordre) jusqu'à tenir dans « budget » minutes,
+// partie par partie : on retire d'abord la théorie (contenu) avant la pratique (étapes, démos),
+// dans la partie la plus longue, en partant de sa fin, et chaque partie garde au moins une slide
+// tant que c'est possible. Couper par la fin supprimait des parties entières du déroulé.
+function trimByParts(slides, budget, removable){
+  const kept = slides.slice();
+  let dur = kept.reduce((a,s)=>a+s.min,0);
+  const prio = s=>PRATIQUE.has(s.role) ? 1 : 2;
+  let strict = true;
+  while(dur > budget){
+    const byPart = {};
+    kept.filter(removable).forEach(s=>{ (byPart[s.part] = byPart[s.part] || []).push(s); });
+    const cands = kept.filter(s=>removable(s) && (!strict || byPart[s.part].length > 1));
+    if(!cands.length){ if(strict){ strict = false; continue; } break; }
+    const partMin = p=>byPart[p].reduce((a,s)=>a+s.min,0);
+    const best = Math.max(...cands.map(prio));
+    const pool = cands.filter(s=>prio(s) === best);
+    const part = pool.map(s=>s.part).sort((x,y)=>partMin(y)-partMin(x) || y-x)[0];
+    const victim = pool.filter(s=>s.part === part).pop();
+    if(kept.filter(removable).length <= 1) break;
+    kept.splice(kept.indexOf(victim), 1); dur -= victim.min;
+  }
+  return kept;
+}
+
 function computeVersions(slides){
   const allIdx = slides.map(s=>s.n);
   const total = slides.reduce((a,s)=>a+s.min,0);
-  const mustKeep = s=>['titre','intro','chapitre','section'].includes(s.role);
+  const removable = s=>!['titre','intro','chapitre','section','hors_contenu'].includes(s.role);
 
-  let v1h30 = slides.filter(s=>!s.optionnel);
-  let dur = v1h30.reduce((a,s)=>a+s.min,0);
-  if(dur > 95){
-    for(let i=v1h30.length-1;i>=0;i--){
-      if(dur <= 95) break;
-      const s = v1h30[i];
-      if(mustKeep(s)) continue;
-      v1h30.splice(i,1); dur -= s.min;
-    }
-  }
-  let v1h = v1h30.slice();
-  let dur1h = v1h.reduce((a,s)=>a+s.min,0);
-  if(dur1h > 65){
-    for(let i=v1h.length-1;i>=0;i--){
-      if(dur1h <= 65) break;
-      const s = v1h[i];
-      if(mustKeep(s)) continue;
-      v1h.splice(i,1); dur1h -= s.min;
-    }
-  }
+  const v1h30 = trimByParts(slides.filter(s=>!s.optionnel), 95, removable);
+  const v1h = trimByParts(v1h30, 65, removable);
   const idx = lst=>lst.map(s=>s.n);
+  const lbl = (name, lst)=>`${name} — ${minsLabel(lst.reduce((a,s)=>a+s.min,0))} · ${lst.length} slides`;
   return {
-    '1h':     { indices: idx(v1h),   label: `1h — ${minsLabel(v1h.reduce((a,s)=>a+s.min,0))} · ${v1h.length} slides` },
-    '1h30':   { indices: idx(v1h30), label: `1h30 — ${minsLabel(v1h30.reduce((a,s)=>a+s.min,0))} · ${v1h30.length} slides` },
+    '1h':     { indices: idx(v1h),   label: lbl('1h', v1h) },
+    '1h30':   { indices: idx(v1h30), label: lbl('1h30', v1h30) },
     'complet':{ indices: allIdx,     label: `Complet — ${minsLabel(total)} · ${allIdx.length} slides` },
   };
 }
@@ -343,6 +351,9 @@ function analyzeSlides(slidesData, excludeGabarit){
     return { n: i+1, titre, role, min: DURATION[role] ?? 8, optionnel: false };
   });
   slides = postProcessRoles(slides);
+  // Partie = suite de slides entre deux séparateurs (slide de section ou de chapitre).
+  let part = 0;
+  slides.forEach(s=>{ if(s.role === 'section' || s.role === 'chapitre') part++; s.part = part; });
 
   if(excludeGabarit){
     const total = slides.length;
@@ -580,15 +591,10 @@ function extractMemo(slidesData, slidesMeta, indices){
 
 const KOLB_BUDGET = { '1h':60, '1h30':90, 'complet':null };
 
-// Garde les slides dans l'ordre tant qu'elles tiennent dans le temps imparti (au moins une) ;
-// les autres sont listées « si le temps le permet », jamais supprimées en silence.
+// Sélection dans le temps imparti, partie par partie ; le surplus est listé « si le temps le permet ».
 function fitSlides(pairs, minutes){
-  const keep = [], rest = []; let used = 0;
-  for(const p of pairs){
-    if(!keep.length || used + p[1].min <= minutes){ keep.push(p); used += p[1].min; }
-    else rest.push(p);
-  }
-  return { keep, rest };
+  const kept = new Set(trimByParts(pairs.map(p=>p[1]), minutes, ()=>true));
+  return { keep: pairs.filter(p=>kept.has(p[1])), rest: pairs.filter(p=>!kept.has(p[1])) };
 }
 
 function extractKolb(slidesData, slidesMeta, versionKey, form){
@@ -1173,9 +1179,9 @@ buttons[0].addEventListener('click', ()=>generate('Fiche Action', async logos=>{
 }));
 
 buttons[1].addEventListener('click', ()=>generate('Mémo participant', async logos=>{
-  const indices = state.versions[state.selectedVersion].indices;
-  const data = extractMemo(state.slidesData, state.meta, indices);
-  await downloadDoc(buildMemo(data, logos), `${state.baseName}-memo.docx`);
+  // Le mémo est le document que le participant garde : il couvre tout l'atelier, quelle que soit la version.
+  const data = extractMemo(state.slidesData, state.meta, null);
+  await downloadDoc(buildMemo(data, logos), `${state.baseName}-memo-complet.docx`);
 }));
 
 buttons[2].addEventListener('click', ()=>generate('Fiche action Kolb', async logos=>{
