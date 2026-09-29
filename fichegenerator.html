@@ -1,0 +1,973 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Générateur de fiches Action, Mémo et Kolb — CD47</title>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@9.8.1/dist/index.iife.js"></script>
+<style>
+  :root{
+    --bg:#13151a; --surface:#1b1e26; --surface-2:#22262f; --border:#2c303a;
+    --text:#eef0f4; --muted:#8a8f9c; --accent:#078ac0; --accent-2:#5eb3d2;
+    --ok:#22c55e; --warn:#f8a824; --err:#ef4444;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Calibri,'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+  .wrap{max-width:760px;margin:0 auto;padding:32px 20px 80px}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+  header h1{font-size:20px;margin:0}
+  .sub{color:var(--muted);font-size:13.5px;line-height:1.5;margin:6px 0 28px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;margin-bottom:18px}
+  .card h2{font-size:15px;margin:0 0 12px;color:var(--accent-2)}
+  .drop{display:block;border:1.5px solid var(--border);border-radius:12px;padding:28px;text-align:center;cursor:pointer;transition:.15s;background:var(--surface-2)}
+  .drop:hover,.drop.drag{border-color:var(--accent);background:rgba(7,138,192,.08)}
+  .drop input{display:none}
+  .drop .ic{font-size:30px;margin-bottom:6px}
+  .drop .name{margin-top:8px;font-size:13px;color:var(--accent-2);word-break:break-all}
+  .summary{display:none}
+  .summary.show{display:block}
+  .summary-row{display:flex;justify-content:space-between;font-size:13.5px;padding:6px 0;border-bottom:1px solid var(--border)}
+  .summary-row:last-child{border-bottom:none}
+  .summary-row b{color:var(--text)}
+  .versions{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+  .ver-opt{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;cursor:pointer;font-size:13.5px}
+  .ver-opt:hover{border-color:var(--accent)}
+  .ver-opt.sel{border-color:var(--accent);background:rgba(7,138,192,.08)}
+  .ver-opt input{accent-color:var(--accent)}
+  .field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;font-size:13px}
+  .field label{color:var(--muted)}
+  .field textarea,.field input{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font:inherit;font-size:13.5px}
+  .field textarea{min-height:64px;resize:vertical}
+  .row2{display:grid;grid-template-columns:1fr 110px;gap:10px;align-items:end}
+  .kolb-step{border-left:3px solid var(--accent);padding-left:12px;margin-bottom:14px}
+  .actions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+  button.gen{flex:1;min-width:200px;padding:13px 16px;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;color:#fff;transition:.15s}
+  button.gen:disabled{opacity:.4;cursor:not-allowed}
+  .gen.action{background:linear-gradient(135deg,#078ac0,#5eb3d2)}
+  .gen.memo{background:linear-gradient(135deg,#187c88,#1ea0a8)}
+  .gen.kolb{background:linear-gradient(135deg,#6c8f00,#a8c400)}
+  button.gen:not(:disabled):hover{filter:brightness(1.1)}
+  .status{min-height:20px;font-size:13px;margin-top:14px}
+  .status.ok{color:var(--ok)}
+  .status.err{color:var(--err)}
+  .status.busy{color:var(--accent-2)}
+  .hint{font-size:12px;color:var(--muted);line-height:1.5;margin-top:14px}
+  @media (max-width:520px){ .row2{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div style="font-size:26px">🧩</div>
+    <h1>Générateur de fiches Action, Mémo et Kolb</h1>
+  </header>
+  <div class="sub">
+    Génère une Fiche Action, un Mémo participant et une Fiche action Kolb au format Word
+    à partir d'un PPTX d'atelier choisi sur ton appareil. Tout se passe dans cet onglet ;
+    le PPTX reste sur ta machine.
+  </div>
+
+  <div class="card">
+    <h2>1. Choisir le PPTX source</h2>
+    <label class="drop" id="drop">
+      <div class="ic">📂</div>
+      <div>Glisser un fichier .pptx ici, ou cliquer pour parcourir</div>
+      <div class="name" id="file-name"></div>
+      <input type="file" id="file-input" accept=".pptx">
+    </label>
+  </div>
+
+  <div class="card summary" id="summary-card">
+    <h2>2. Aperçu détecté</h2>
+    <div class="summary-row"><span>Titre</span><b id="sum-titre"></b></div>
+    <div class="summary-row"><span>Slides</span><b id="sum-slides"></b></div>
+    <div class="summary-row"><span>Durée totale (complet)</span><b id="sum-duree"></b></div>
+
+    <div class="versions" id="versions"></div>
+  </div>
+
+  <div class="card summary" id="kolb-card">
+    <h2>3. Fiche Kolb — ce que le PPTX ne dit pas</h2>
+    <div class="hint" style="margin:0 0 14px">
+      Le PPTX alimente l'apport (étape 3) et les exercices (étape 4).
+      La mise en situation et le retour collectif relèvent de l'animateur : à saisir ici.
+      Utilisé uniquement pour la Fiche Kolb.
+    </div>
+    <div class="kolb-step">
+      <div class="row2">
+        <div class="field"><label for="k-exp">Étape 1 — Mise en situation : consigne donnée aux participants (obligatoire)</label>
+          <textarea id="k-exp" placeholder="Ex. : Essayez de créer votre adresse mail seul, sans aide."></textarea></div>
+        <div class="field"><label for="k-exp-min">Durée (min)</label><input id="k-exp-min" type="number" min="5" max="90" value="20"></div>
+      </div>
+    </div>
+    <div class="kolb-step">
+      <div class="row2">
+        <div class="field"><label for="k-obs">Étape 2 — Retour collectif : questions posées au groupe (une par ligne)</label>
+          <textarea id="k-obs">Qu'est-ce qui a été facile ?
+Où avez-vous bloqué ?
+Qu'avez-vous découvert ?</textarea></div>
+        <div class="field"><label for="k-obs-min">Durée (min)</label><input id="k-obs-min" type="number" min="5" max="60" value="15"></div>
+      </div>
+    </div>
+    <div class="kolb-step">
+      <div class="row2">
+        <div class="field"><label for="k-app">Étape 4 — Consigne d'application (obligatoire si le PPTX n'a aucune slide d'exercice)</label>
+          <textarea id="k-app" placeholder="Ex. : Envoyez un mail avec une pièce jointe à votre voisin."></textarea></div>
+        <div class="field"><label for="k-app-min">Durée si aucun exercice dans le PPTX (min)</label><input id="k-app-min" type="number" min="5" max="90" value="20"></div>
+      </div>
+    </div>
+    <div class="field"><label for="k-public">Public (facultatif)</label><input id="k-public"></div>
+    <div class="field"><label for="k-prereq">Prérequis (facultatif)</label><input id="k-prereq"></div>
+    <div class="field"><label for="k-part">Nombre de participants (facultatif)</label><input id="k-part"></div>
+  </div>
+
+  <div class="card summary" id="gen-card">
+    <h2>4. Générer</h2>
+    <div class="actions">
+      <button class="gen action" id="btn-fiche" disabled>📋 Fiche Action (.docx)</button>
+      <button class="gen memo" id="btn-memo" disabled>📝 Mémo participant (.docx)</button>
+      <button class="gen kolb" id="btn-kolb" disabled>🔄 Fiche action Kolb (.docx)</button>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="hint">
+    Nécessite une connexion internet (librairies de lecture .pptx et d'écriture .docx chargées depuis un CDN).
+    Les logos d'en-tête et de pied de page sont lus dans <code>assets/logos/</code> : la page doit être ouverte
+    depuis son adresse web, pas en double-cliquant sur le fichier.
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════
+   1. LECTURE DU PPTX UPLOADÉ (JSZip + parsing XML minimal)
+   ════════════════════════════════════════════════════════════ */
+
+async function parsePptx(file){
+  const zip = await JSZip.loadAsync(file);
+  const presEntry = zip.file('ppt/presentation.xml');
+  const relsEntry = zip.file('ppt/_rels/presentation.xml.rels');
+  if(!presEntry || !relsEntry) throw new Error("Fichier .pptx invalide (structure OOXML introuvable).");
+
+  const presXml = await presEntry.async('text');
+  const relsXml = await relsEntry.async('text');
+  const presDoc = new DOMParser().parseFromString(presXml, 'application/xml');
+  const relsDoc = new DOMParser().parseFromString(relsXml, 'application/xml');
+
+  const relMap = {};
+  Array.from(relsDoc.getElementsByTagName('Relationship')).forEach(r=>{
+    relMap[r.getAttribute('Id')] = r.getAttribute('Target');
+  });
+
+  const sldIds = Array.from(presDoc.getElementsByTagName('p:sldId'));
+  if(!sldIds.length) throw new Error("Aucune slide trouvée dans le PPTX.");
+
+  const slidePaths = sldIds.map(sid=>{
+    const rid = sid.getAttribute('r:id') || sid.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id');
+    const target = relMap[rid];
+    if(!target) return null;
+    return 'ppt/' + target.replace(/^\.?\/?/,'');
+  }).filter(Boolean);
+
+  const slides = [];
+  for(let i=0;i<slidePaths.length;i++){
+    const entry = zip.file(slidePaths[i]);
+    if(!entry) continue;
+    const xml = await entry.async('text');
+    const doc = new DOMParser().parseFromString(xml, 'application/xml');
+    slides.push(parseSlideXml(doc, i+1));
+  }
+  if(!slides.length) throw new Error("Impossible de lire les slides du PPTX.");
+  return slides;
+}
+
+function parseSlideXml(doc, idx){
+  const spList = Array.from(doc.getElementsByTagName('p:sp'));
+  const shapes = [];
+  for(const sp of spList){
+    let isTitle = false;
+    const ph = sp.getElementsByTagName('p:ph')[0];
+    if(ph){
+      const type = ph.getAttribute('type');
+      if(type === 'title' || type === 'ctrTitle') isTitle = true;
+    }
+    const txBody = sp.getElementsByTagName('p:txBody')[0];
+    if(!txBody) continue;
+    const paragraphs = Array.from(txBody.getElementsByTagName('a:p')).map(ap=>
+      Array.from(ap.getElementsByTagName('a:t')).map(t=>t.textContent).join('')
+    );
+    shapes.push({ isTitle, paragraphs });
+  }
+  return { n: idx, shapes };
+}
+
+function getSlideTitle(slide){
+  const titleShape = slide.shapes.find(s=>s.isTitle);
+  if(titleShape){
+    const t = titleShape.paragraphs.join('\n').trim();
+    if(t) return t;
+  }
+  for(const s of slide.shapes){
+    const t = s.paragraphs.join('\n').trim();
+    if(t && t.length < 120) return t.split('\n')[0].trim();
+  }
+  return '(sans titre)';
+}
+
+/* ════════════════════════════════════════════════════════════
+   2. ANALYSE (port de analyze_pptx.py)
+   ════════════════════════════════════════════════════════════ */
+
+function classifyRole(title, idx){
+  const t = title.toLowerCase();
+  if(idx === 0) return 'titre';
+  if(['programme','au menu','sommaire','objectif'].some(w=>t.includes(w))) return 'intro';
+  if(['chapitre','partie','module','étape'].some(w=>t.includes(w))) return 'chapitre';
+  if(['démo','demo','pratique','exercice','manipulation','tutoriel'].some(w=>t.includes(w))) return 'demo';
+  if(['pour aller plus loin','ressource','bilan','conclusion','récap','merci','questions fréquentes'].some(w=>t.includes(w))) return 'conclusion';
+  return 'contenu';
+}
+
+const DURATION = { titre:2, intro:4, chapitre:2, demo:12, contenu:8, conclusion:5 };
+
+function postProcessRoles(slides){
+  const body = slides.filter(s=>!['titre','intro','conclusion'].includes(s.role));
+  if(body.length){
+    const chapCount = body.filter(s=>s.role==='chapitre').length;
+    if(chapCount / body.length > 0.5){
+      slides.forEach(s=>{ if(s.role==='chapitre'){ s.role='contenu'; s.min=10; } });
+    }
+  }
+  return slides;
+}
+
+function isOptionalSlide(slide){
+  const t = slide.titre.toLowerCase();
+  return ['optionnel','pour aller plus loin','ressource','numérique responsable','éco-geste'].some(w=>t.includes(w));
+}
+
+function minsLabel(m){
+  const h = Math.floor(m/60), m2 = m%60;
+  if(h && m2) return `${h}h${String(m2).padStart(2,'0')}`;
+  if(h) return `${h}h`;
+  return `${m} min`;
+}
+
+function computeVersions(slides){
+  const allIdx = slides.map(s=>s.n);
+  const total = slides.reduce((a,s)=>a+s.min,0);
+  const mustKeep = s=>['titre','intro','chapitre'].includes(s.role);
+
+  let v1h30 = slides.filter(s=>!s.optionnel);
+  let dur = v1h30.reduce((a,s)=>a+s.min,0);
+  if(dur > 95){
+    for(let i=v1h30.length-1;i>=0;i--){
+      if(dur <= 95) break;
+      const s = v1h30[i];
+      if(mustKeep(s)) continue;
+      v1h30.splice(i,1); dur -= s.min;
+    }
+  }
+  let v1h = v1h30.slice();
+  let dur1h = v1h.reduce((a,s)=>a+s.min,0);
+  if(dur1h > 65){
+    for(let i=v1h.length-1;i>=0;i--){
+      if(dur1h <= 65) break;
+      const s = v1h[i];
+      if(mustKeep(s)) continue;
+      v1h.splice(i,1); dur1h -= s.min;
+    }
+  }
+  const idx = lst=>lst.map(s=>s.n);
+  return {
+    '1h':     { indices: idx(v1h),   label: `1h — ${minsLabel(v1h.reduce((a,s)=>a+s.min,0))} · ${v1h.length} slides` },
+    '1h30':   { indices: idx(v1h30), label: `1h30 — ${minsLabel(v1h30.reduce((a,s)=>a+s.min,0))} · ${v1h30.length} slides` },
+    'complet':{ indices: allIdx,     label: `Complet — ${minsLabel(total)} · ${allIdx.length} slides` },
+  };
+}
+
+function analyzeSlides(slidesData){
+  let slides = slidesData.map((s,i)=>{
+    const titre = getSlideTitle(s);
+    const role = classifyRole(titre, i);
+    return { n: i+1, titre, role, min: DURATION[role] ?? 8, optionnel: false };
+  });
+  slides = postProcessRoles(slides);
+
+  // Les 4 premières et les 2 dernières slides sont le bloc fixe du gabarit
+  // (présentation du Département + clôture), présent sur tous les PPTX concernés
+  // par ce flux — toujours hors contenu d'atelier, quel que soit leur titre.
+  const total = slides.length;
+  slides.forEach((s,i)=>{
+    const n = i+1;
+    if((n > 1 && n <= 4) || n > total - 2){ s.role = 'hors_contenu'; s.min = 0; }
+  });
+
+  slides.forEach(s=>{ s.optionnel = isOptionalSlide(s); });
+  return slides;
+}
+
+/* ════════════════════════════════════════════════════════════
+   3. EXTRACTION DU CONTENU (port de generate_fiches.py / generate_memos.py)
+   ════════════════════════════════════════════════════════════ */
+
+function cleanText(text){
+  return (text || '').replace(/[^\x00-\x7FÀ-ɏ‘’–—«»]/g, '').trim();
+}
+function trunc(t, n){ return t.length > n ? t.slice(0,n) + '…' : t; }
+function normLoose(t){ return (t||'').replace(/[^a-zA-Z0-9À-ɏ_\s]/g,'').toLowerCase().trim(); }
+
+const MATERIEL_DEFAULT = [
+  "1 PC ou tablette par participant",
+  "Connexion Wi-Fi stable",
+  "Grand écran / vidéoprojecteur",
+  "Fiches mémo (1 par participant)",
+];
+const CONSEILS_DEFAULT = [
+  "Adapter le rythme selon le niveau du groupe.",
+  "Laisser les participants manipuler dès que possible.",
+  "Prévoir un compte de démonstration pour ne pas exposer de données personnelles.",
+  "Terminer en distribuant la fiche mémo — c'est le support qu'ils garderont.",
+];
+
+function getFirstBullet(slide, title){
+  for(const shape of slide.shapes){
+    for(const para of shape.paragraphs){
+      const t = para.trim();
+      if(t && t !== title && t.length > 10) return cleanText(t);
+    }
+  }
+  return '';
+}
+function getBullets(slide, title, maxB=3){
+  const bullets = [];
+  for(const shape of slide.shapes){
+    for(const para of shape.paragraphs){
+      const t = para.trim();
+      if(t && t !== title && t.length > 10){
+        bullets.push(cleanText(t));
+        if(bullets.length >= maxB) return bullets;
+      }
+    }
+  }
+  return bullets;
+}
+function getMemoBullets(slide, title, maxB=4){
+  const bullets = [];
+  const titleNorm = normLoose(title);
+  for(const shape of slide.shapes){
+    for(const para of shape.paragraphs){
+      const t = cleanText(para.trim());
+      if(t.length < 10) continue;
+      const tNorm = normLoose(t);
+      if(tNorm === titleNorm || titleNorm.includes(tNorm) || tNorm.includes(titleNorm)) continue;
+      bullets.push(t);
+      if(bullets.length >= maxB) break;
+    }
+    if(bullets.length >= maxB) break;
+  }
+  return bullets;
+}
+
+function extractFiche(slidesData, slidesMeta, indices){
+  const titre = cleanText(getSlideTitle(slidesData[0]));
+  const idxSet = indices ? new Set(indices) : null;
+  const pairs = slidesData.map((s,i)=>[s, slidesMeta[i]]).filter(([,m])=> !idxSet || idxSet.has(m.n));
+
+  const dureeMin = pairs.reduce((a,[,m])=>a+m.min,0);
+  const h = Math.floor(dureeMin/60), mv = dureeMin%60;
+  const dureeStr = (h && mv) ? `${h}h${String(mv).padStart(2,'0')}` : (h ? `${h}h` : `${mv} min`);
+
+  const content = pairs.filter(([,m])=>['contenu','demo','chapitre'].includes(m.role) && m.n > 1);
+  const objectifs = content.slice(0,4).map(([,m])=>trunc(cleanText(m.titre),55));
+  while(objectifs.length < 4) objectifs.push('');
+
+  const deroule = []; let cumtime = 0;
+  for(const [slide, meta] of pairs){
+    if(meta.role === 'titre' || meta.role === 'hors_contenu' || meta.role === 'intro'){ cumtime += meta.min; continue; }
+    if(meta.optionnel){ cumtime += meta.min; continue; }
+    const h2 = Math.floor(cumtime/60), m2 = cumtime%60;
+    deroule.push({
+      heure: `${h2}:${String(m2).padStart(2,'0')}`,
+      min: meta.min,
+      titre: trunc(cleanText(meta.titre),48),
+      bullet: getFirstBullet(slide, meta.titre),
+    });
+    cumtime += meta.min;
+  }
+
+  const optRaw = slidesMeta.map((m,i)=>[slidesData[i],m])
+    .filter(([,m])=> m.optionnel && m.role !== 'titre' && m.role !== 'hors_contenu' && (!idxSet || !idxSet.has(m.n)));
+  const optionnels = optRaw.map(([s,m])=>({
+    min: m.min, titre: trunc(cleanText(m.titre),38), bullets: getBullets(s, m.titre, 3),
+  }));
+
+  return { titre, duree: dureeStr, objectifs, materiel: MATERIEL_DEFAULT, deroule, optionnels, conseils: CONSEILS_DEFAULT };
+}
+
+function extractMemo(slidesData, slidesMeta, indices){
+  const idxSet = (indices && indices.length) ? new Set(indices) : null;
+  const rolesSteps = new Set(['contenu','demo']);
+
+  const steps = [];
+  slidesMeta.forEach((meta,i)=>{
+    if(!rolesSteps.has(meta.role)) return;
+    if(meta.optionnel) return;
+    if(idxSet && !idxSet.has(meta.n)) return;
+    const slide = slidesData[i];
+    const bullets = getMemoBullets(slide, meta.titre, 4);
+    steps.push({ titre: cleanText(meta.titre), bullets: bullets.length ? bullets : ['Contenu à compléter'] });
+  });
+
+  let titreRaw = '';
+  for(const shape of slidesData[0].shapes){
+    const t = shape.paragraphs.join('\n').trim();
+    if(t && t.length < 120){ titreRaw = t.split('\n')[0].trim(); break; }
+  }
+  const titre = trunc(cleanText(titreRaw), 60);
+
+  const bsa = [];
+  slidesMeta.forEach((meta,i)=>{
+    if(!meta.optionnel) return;
+    if(['titre','chapitre','hors_contenu'].includes(meta.role)) return;
+    if(idxSet && idxSet.has(meta.n)) return;
+    const slide = slidesData[i];
+    const bullets = getMemoBullets(slide, meta.titre, 4);
+    bsa.push({ titre: cleanText(meta.titre), bullets: bullets.length ? bullets : ['Contenu à compléter'] });
+  });
+
+  return { titre, steps, bsa };
+}
+
+function extractKolb(slidesData, slidesMeta, indices, form){
+  const titre = cleanText(getSlideTitle(slidesData[0]));
+  const idxSet = indices ? new Set(indices) : null;
+  const pairs = slidesData.map((s,i)=>[s, slidesMeta[i]])
+    .filter(([,m])=> (!idxSet || idxSet.has(m.n)) && !m.optionnel && !['titre','hors_contenu','intro'].includes(m.role));
+
+  const toItem = ([slide, meta])=>({ titre: trunc(cleanText(meta.titre),60), bullets: getBullets(slide, meta.titre, 2) });
+  const apportPairs = pairs.filter(([,m])=>['contenu','chapitre'].includes(m.role));
+  const pratiquePairs = pairs.filter(([,m])=>m.role === 'demo');
+
+  const consigneApp = form.app.trim();
+  if(!pratiquePairs.length && !consigneApp){
+    throw new Error("Le PPTX ne contient aucune slide d'exercice : renseigne la consigne d'application (étape 4).");
+  }
+
+  const objectifs = apportPairs.concat(pratiquePairs).slice(0,4).map(([,m])=>trunc(cleanText(m.titre),70));
+  const sum = lst=>lst.reduce((a,[,m])=>a+m.min,0);
+
+  const phases = [
+    { phase:'Accueil', etape:null, min:10,
+      texte:['Tour de table, recueil des attentes, présentation du déroulé.'] },
+    { phase:'Mise en situation', etape:0, min:form.expMin,
+      texte:[form.exp.trim(), "L'animateur observe sans intervenir et note les points de blocage."] },
+    { phase:'Retour collectif', etape:1, min:form.obsMin,
+      texte:['Questions posées au groupe :'], puces: form.obs.split('\n').map(s=>s.trim()).filter(Boolean) },
+    { phase:'Apport', etape:2, min:sum(apportPairs) || 15,
+      texte: apportPairs.length ? [] : ['Formaliser la méthode vue pendant la mise en situation.'],
+      slides: apportPairs.map(toItem) },
+    { phase:'Application', etape:3, min: pratiquePairs.length ? sum(pratiquePairs) : form.appMin,
+      texte: consigneApp ? [consigneApp] : [], slides: pratiquePairs.map(toItem) },
+    { phase:'Clôture', etape:null, min:10,
+      texte:['Bilan à chaud, réponses aux questions, remise du mémo participant, questionnaire d’évaluation.'] },
+  ];
+  let cum = 0;
+  phases.forEach(p=>{ p.heure = `${Math.floor(cum/60)}:${String(cum%60).padStart(2,'0')}`; cum += p.min; });
+
+  return {
+    titre, duree: minsLabel(cum), objectifs, phases, materiel: MATERIEL_DEFAULT,
+    public: form.public.trim(), prereq: form.prereq.trim(), participants: form.part.trim(),
+  };
+}
+
+/* ════════════════════════════════════════════════════════════
+   4. CONSTRUCTION DES DOCX (bibliothèque docx)
+   ════════════════════════════════════════════════════════════ */
+
+const D = window.docx;
+const FONT = 'Calibri';
+const COLORS = {
+  BLU:'078AC0', TEA:'187C88', SKY:'5EB3D2', ORG:'E67D21', YEL:'F8A824',
+  DRK:'2B2B2B', GRY:'6E6E6D', WHT:'FFFFFF', BRN:'5D4037',
+  BG_BLU:'E6F3FA', BG_TEA:'EBF7F6', BG_STP:'F8F9FD', BD_STP:'DDE6ED', BG_OPT:'FFF8EF', BG_CNS:'FFFCE7',
+  BG_BSA:'FFFCE7', BG_BDA:'EBF5FF',
+};
+const KOLB = [
+  { nom:'Expérience concrète',        verbe:'Vivre',      fill:'D1E7F5',
+    def:'Se confronter à une situation réelle : manipuler l’outil, faire l’exercice.' },
+  { nom:'Observation réfléchie',      verbe:'Analyser',   fill:'E2F0D9',
+    def:'Prendre du recul : qu’est-ce qui s’est passé ? Où ai-je buté ?' },
+  { nom:'Conceptualisation abstraite', verbe:'Comprendre', fill:'FFF2CC',
+    def:'Tirer des règles, des principes, faire le lien avec la théorie.' },
+  { nom:'Expérimentation active',     verbe:'Tester',     fill:'FBE4D5',
+    def:'Appliquer dans une situation nouvelle pour vérifier ce qu’on a compris.' },
+];
+
+// A4, marges 1,76 cm : largeur utile 11906 - 2 × 1000 = 9906 DXA
+const PAGE_W = 11906, PAGE_H = 16838, MARGIN = 1000, CW = PAGE_W - 2*MARGIN;
+
+const LOGOS = {
+  lotgaronne: { file:'assets/logos/lot-et-garonne.png',       w:170, h:32 },
+  declic:     { file:'assets/logos/declic47.png',             w:125, h:46 },
+  anct:       { file:'assets/logos/republique-anct.png',      w:140, h:44 },
+  cnum:       { file:'assets/logos/conseiller-numerique.png', w:50,  h:45 },
+};
+let logosCache = null;
+async function loadLogos(){
+  if(logosCache) return logosCache;
+  const out = {};
+  for(const [k, l] of Object.entries(LOGOS)){
+    try{
+      const r = await fetch(l.file);
+      if(!r.ok) throw new Error(r.status);
+      out[k] = new Uint8Array(await r.arrayBuffer());
+    }catch(e){ out[k] = null; }
+  }
+  logosCache = out;
+  return out;
+}
+
+function run(text, o={}){
+  return new D.TextRun({ text, font:FONT, size:Math.round((o.size||10.5)*2), bold:!!o.bold, italics:!!o.italic, color:o.color||COLORS.DRK });
+}
+function para(text, o={}){
+  const runs = Array.isArray(text) ? text : [run(text, o)];
+  return new D.Paragraph({ children:runs, alignment:o.align, spacing:{ before:o.before||0, after:o.after ?? 60 }, keepNext:!!o.keepNext });
+}
+function heading(text, level=1){
+  return new D.Paragraph({
+    heading: level === 1 ? D.HeadingLevel.HEADING_1 : D.HeadingLevel.HEADING_2,
+    keepNext:true,
+    children:[run(text, { size: level === 1 ? 14 : 12, bold:true, color:COLORS.BLU })],
+  });
+}
+function bullet(text, o={}){
+  return new D.Paragraph({ numbering:{ reference:'puces', level:0 }, spacing:{ after:30 }, children:[run(text, { size:o.size||10 })] });
+}
+function arrow(text, o={}){
+  return para([run('→ ', { size:o.size||10, bold:true, color:o.color||COLORS.BLU }), run(text, { size:o.size||10 })], { after:30 });
+}
+function dottedLine(){
+  return new D.Paragraph({ spacing:{ before:220, after:0 }, border:{ bottom:{ style:D.BorderStyle.DOTTED, size:6, color:'A6A6A6', space:1 } }, children:[] });
+}
+
+const NONE = { style:D.BorderStyle.NONE, size:0, color:'FFFFFF' };
+const NO_BORDERS = { top:NONE, bottom:NONE, left:NONE, right:NONE };
+function lineBorders(color, size=4){
+  const b = { style:D.BorderStyle.SINGLE, size, color };
+  return { top:b, bottom:b, left:b, right:b };
+}
+function cell(children, w, o={}){
+  return new D.TableCell({
+    width:{ size:w, type:D.WidthType.DXA },
+    borders: o.borders || lineBorders(COLORS.BD_STP),
+    shading: o.fill ? { type:D.ShadingType.CLEAR, fill:o.fill, color:'auto' } : undefined,
+    verticalAlign: o.valign,
+    margins:{ top:90, bottom:90, left:140, right:140 },
+    children: children.length ? children : [para('')],
+  });
+}
+function table(widths, rows, o={}){
+  return new D.Table({
+    width:{ size:widths.reduce((a,b)=>a+b,0), type:D.WidthType.DXA },
+    columnWidths: widths,
+    borders: o.noBorders ? { top:NONE, bottom:NONE, left:NONE, right:NONE, insideHorizontal:NONE, insideVertical:NONE } : undefined,
+    rows,
+  });
+}
+function row(cells, o={}){ return new D.TableRow({ children:cells, cantSplit:true, tableHeader:!!o.header }); }
+function headerRow(labels, widths, fill=COLORS.BLU){
+  return row(labels.map((t,i)=>cell([para(t, { bold:true, color:COLORS.WHT, size:10, after:0 })], widths[i], { fill })), { header:true });
+}
+function spacer(after=120){ return new D.Paragraph({ spacing:{ after }, children:[] }); }
+
+function logoRun(logos, key, align){
+  const l = LOGOS[key];
+  if(!logos[key]) return para('', { align, after:0 });
+  return new D.Paragraph({ alignment:align, spacing:{ after:0 },
+    children:[new D.ImageRun({ type:'png', data:logos[key], transformation:{ width:l.w, height:l.h } })] });
+}
+function makeHeader(logos){
+  const w = [CW/2, CW/2];
+  return new D.Header({ children:[
+    table(w, [row([
+      cell([logoRun(logos,'lotgaronne',D.AlignmentType.LEFT)], w[0], { borders:NO_BORDERS, valign:D.VerticalAlign.CENTER }),
+      cell([logoRun(logos,'declic',D.AlignmentType.RIGHT)], w[1], { borders:NO_BORDERS, valign:D.VerticalAlign.CENTER }),
+    ])], { noBorders:true }),
+  ]});
+}
+function makeFooter(logos, label){
+  const w = [2600, CW-2600-1200, 1200];
+  const center = new D.Paragraph({ alignment:D.AlignmentType.CENTER, spacing:{ after:0 }, children:[
+    run(`${label}  |  Page `, { size:8, color:COLORS.GRY }),
+    new D.TextRun({ children:[D.PageNumber.CURRENT], font:FONT, size:16, color:COLORS.GRY }),
+    run('/', { size:8, color:COLORS.GRY }),
+    new D.TextRun({ children:[D.PageNumber.TOTAL_PAGES], font:FONT, size:16, color:COLORS.GRY }),
+  ]});
+  return new D.Footer({ children:[
+    table(w, [row([
+      cell([logoRun(logos,'anct',D.AlignmentType.LEFT)], w[0], { borders:NO_BORDERS, valign:D.VerticalAlign.CENTER }),
+      cell([center], w[1], { borders:NO_BORDERS, valign:D.VerticalAlign.CENTER }),
+      cell([logoRun(logos,'cnum',D.AlignmentType.RIGHT)], w[2], { borders:NO_BORDERS, valign:D.VerticalAlign.CENTER }),
+    ])], { noBorders:true }),
+  ]});
+}
+
+function makeDocument(children, logos, footerLabel){
+  return new D.Document({
+    creator:'CD47 — Service Inclusion Numérique',
+    styles:{
+      default:{ document:{ run:{ font:FONT, size:21, color:COLORS.DRK } } },
+      paragraphStyles:[
+        { id:'Heading1', name:'Heading 1', basedOn:'Normal', next:'Normal', quickFormat:true,
+          run:{ font:FONT, size:28, bold:true, color:COLORS.BLU },
+          paragraph:{ spacing:{ before:260, after:110 }, outlineLevel:0 } },
+        { id:'Heading2', name:'Heading 2', basedOn:'Normal', next:'Normal', quickFormat:true,
+          run:{ font:FONT, size:24, bold:true, color:COLORS.BLU },
+          paragraph:{ spacing:{ before:200, after:90 }, outlineLevel:1 } },
+      ],
+    },
+    numbering:{ config:[{ reference:'puces', levels:[{ level:0, format:D.LevelFormat.BULLET, text:'•', alignment:D.AlignmentType.LEFT,
+      style:{ paragraph:{ indent:{ left:420, hanging:240 } } } }] }] },
+    sections:[{
+      properties:{ page:{ size:{ width:PAGE_W, height:PAGE_H }, margin:{ top:1650, bottom:1500, left:MARGIN, right:MARGIN, header:450, footer:400 } } },
+      headers:{ default: makeHeader(logos) },
+      footers:{ default: makeFooter(logos, footerLabel) },
+      children,
+    }],
+  });
+}
+
+function docTitle(titre, sousTitre){
+  return [
+    new D.Paragraph({ alignment:D.AlignmentType.CENTER, spacing:{ after:40 }, children:[run(titre, { size:20, bold:true, color:COLORS.BLU })] }),
+    para(sousTitre, { size:9, color:COLORS.GRY, align:D.AlignmentType.CENTER, after:200 }),
+  ];
+}
+
+/* ── Fiche Action ── */
+function buildFiche(data, logos){
+  const out = docTitle(data.titre, `Fiche Action | ${data.duree} | Guide d'animation — Conseillers Numériques CD47`);
+
+  const w2 = [CW/2 - 60, 120, CW/2 - 60];
+  const objectifs = data.objectifs.filter(Boolean);
+  out.push(table(w2, [row([
+    cell([para('Objectifs', { bold:true, color:COLORS.BLU, size:11 }), ...objectifs.map(o=>arrow(o))], w2[0], { fill:COLORS.BG_BLU, borders:lineBorders(COLORS.BLU, 8) }),
+    cell([], w2[1], { borders:NO_BORDERS }),
+    cell([para('Matériel nécessaire', { bold:true, color:COLORS.TEA, size:11 }), ...data.materiel.map(m=>arrow(m, { color:COLORS.TEA }))], w2[2], { fill:COLORS.BG_TEA, borders:lineBorders(COLORS.TEA, 8) }),
+  ])], { noBorders:true }));
+
+  out.push(heading("Déroulé de l'atelier"));
+  const wd = [1100, 900, CW-2000];
+  out.push(table(wd, [
+    headerRow(['Horaire','Durée','Séquence et contenu'], wd),
+    ...data.deroule.map(s=>row([
+      cell([para(s.heure, { bold:true, size:10, after:0 })], wd[0], { fill:COLORS.BG_STP }),
+      cell([para(`${s.min} min`, { bold:true, size:10, color:COLORS.BLU, after:0 })], wd[1], { fill:COLORS.BG_STP }),
+      cell([para(s.titre, { bold:true, size:10.5, after:s.bullet ? 30 : 0 }), ...(s.bullet ? [para(s.bullet, { size:9.5, after:0 })] : [])], wd[2]),
+    ])),
+  ]));
+
+  if(data.optionnels.length){
+    out.push(heading('Blocs optionnels — à aborder si le temps le permet'));
+    const wo = [1100, CW-1100];
+    out.push(table(wo, [
+      headerRow(['Durée','Bloc'], wo, COLORS.ORG),
+      ...data.optionnels.map(o=>row([
+        cell([para(`${o.min} min`, { bold:true, size:10, color:COLORS.ORG, after:0 })], wo[0], { fill:COLORS.BG_OPT, borders:lineBorders(COLORS.ORG) }),
+        cell([para(o.titre, { bold:true, size:10.5, after:30 }), ...o.bullets.map(b=>arrow(b, { size:9.5, color:COLORS.ORG }))], wo[1], { fill:COLORS.BG_OPT, borders:lineBorders(COLORS.ORG) }),
+      ])),
+    ]));
+  }
+
+  out.push(heading('Conseils pour une bonne animation'));
+  data.conseils.forEach(c=>out.push(bullet(c)));
+  return makeDocument(out, logos, 'Fiche Action — CD47 Service Inclusion Numérique');
+}
+
+/* ── Mémo participant ── */
+function contactBox(){
+  const w = [CW];
+  return table(w, [row([cell([
+    para("Besoin d'aide ?", { size:13, bold:true, color:COLORS.BLU, align:D.AlignmentType.CENTER, after:40 }),
+    para('Votre Conseiller Numérique est là pour vous accompagner !', { size:11, bold:true, color:COLORS.TEA, align:D.AlignmentType.CENTER, after:40 }),
+    para('conseiller-numerique@lotetgaronne.fr  ·  Tél : 05 53 47 31 32', { size:11, align:D.AlignmentType.CENTER, after:30 }),
+    para('www.lotetgaronne.fr/inclusion-numerique', { size:10, color:COLORS.GRY, align:D.AlignmentType.CENTER, after:30 }),
+    para("Direction des Systèmes d'Information — Service Inclusion Numérique — CD47", { size:9, color:COLORS.GRY, align:D.AlignmentType.CENTER, after:0 }),
+  ], w[0], { fill:COLORS.BG_BDA, borders:lineBorders(COLORS.BLU, 8) })])]);
+}
+
+function buildMemo(data, logos){
+  const steps = data.steps.slice(0, 8);
+  const titreDisplay = data.titre.replace(/^(Mon mémo[\s—-]+)/,'');
+  const out = docTitle(`Mon mémo — ${titreDisplay}`, steps.slice(0,3).map(s=>s.titre).join(' | '));
+
+  const ws = [800, CW-800];
+  steps.forEach((s,i)=>{
+    const [ac, bgc] = i % 2 ? [COLORS.TEA, COLORS.BG_TEA] : [COLORS.BLU, COLORS.BG_BLU];
+    out.push(table(ws, [row([
+      cell([para(String(i+1), { size:22, bold:true, color:COLORS.WHT, align:D.AlignmentType.CENTER, after:0 })], ws[0], { fill:ac, borders:lineBorders(ac), valign:D.VerticalAlign.CENTER }),
+      cell([para(s.titre, { size:11.5, bold:true, color:ac, after:50 }), ...s.bullets.slice(0,4).map(b=>arrow(b, { color:ac }))], ws[1], { fill:bgc, borders:lineBorders(bgc) }),
+    ])]));
+    out.push(spacer(100));
+  });
+
+  data.bsa.forEach(b=>{
+    out.push(table([CW], [row([cell([
+      para(b.titre, { size:12, bold:true, color:COLORS.BRN, after:60 }),
+      ...b.bullets.map(t=>arrow(t, { color:COLORS.BRN })),
+    ], CW, { fill:COLORS.BG_BSA, borders:lineBorders(COLORS.YEL, 8) })])]));
+    out.push(spacer(100));
+  });
+
+  out.push(contactBox());
+  return makeDocument(out, logos, 'Mémo participant — CD47 Service Inclusion Numérique');
+}
+
+/* ── Fiche action Kolb ── */
+function kolbMemoPage(){
+  const out = [
+    para('FICHE MÉMO', { size:10, bold:true, color:COLORS.GRY, after:20 }),
+    new D.Paragraph({ spacing:{ after:40 }, children:[run('Le cycle d’apprentissage de Kolb', { size:20, bold:true, color:COLORS.BLU })] }),
+    para('David Kolb, 1984 — apprentissage expérientiel : on apprend en passant par l’expérience, pas seulement en écoutant.', { italic:true, color:COLORS.GRY, after:120 }),
+    heading('Le cycle en 4 étapes'),
+  ];
+  const wc = [650, 2600, CW-3250];
+  out.push(table(wc, [
+    headerRow(['#','Étape','Ce que ça veut dire'], wc),
+    ...KOLB.map((k,i)=>row([
+      cell([para(String(i+1), { size:14, bold:true, align:D.AlignmentType.CENTER, after:0 })], wc[0], { fill:k.fill }),
+      cell([para(k.nom, { bold:true, after:20 }), para(k.verbe, { italic:true, after:0 })], wc[1], { fill:k.fill }),
+      cell([para(k.def, { after:0 })], wc[2]),
+    ])),
+  ]));
+  out.push(para('Le cycle est continu : l’étape 4 produit une nouvelle expérience, et on repart à l’étape 1.', { italic:true, size:9.5, before:60 }));
+
+  out.push(heading('Les 4 styles d’apprentissage'));
+  const wst = [2300, 2800, CW-5100];
+  out.push(table(wst, [
+    headerRow(['Style','Combinaison','Profil'], wst),
+    ...[
+      ['Divergent','Concret + réfléchi','Observe, imagine, aime le travail en groupe.'],
+      ['Assimilateur','Réfléchi + abstrait','Aime les modèles, la logique, les explications structurées.'],
+      ['Convergent','Abstrait + actif','Cherche l’application pratique, résout des problèmes concrets.'],
+      ['Accommodateur','Actif + concret','Apprend en faisant, teste, s’adapte vite.'],
+    ].map(r=>row(r.map((t,i)=>cell([para(t, { bold:i===0, after:0 })], wst[i])))),
+  ]));
+
+  out.push(heading('Points de vigilance'));
+  [
+    'Laisser d’abord la main aux participants avant d’expliquer (étape 1).',
+    'Ne pas sauter l’étape 2 : c’est là que l’expérience devient un apprentissage.',
+    'Les styles décrivent des préférences, pas des cases : varier les approches.',
+    'Terminer par un cas différent, à refaire seul (étape 4).',
+  ].forEach(t=>out.push(bullet(t)));
+  return out;
+}
+
+function buildKolb(data, logos){
+  const out = kolbMemoPage();
+  out.push(new D.Paragraph({ children:[new D.PageBreak()] }));
+  out.push(para('FICHE ACTION', { size:10, bold:true, color:COLORS.GRY, after:20 }));
+  out.push(new D.Paragraph({ spacing:{ after:120 }, children:[run(data.titre, { size:20, bold:true, color:COLORS.BLU })] }));
+
+  out.push(heading('Informations générales'));
+  const wi = [2600, CW-2600];
+  const val = v => v ? [para(v, { after:0 })] : [dottedLine()];
+  const infos = [
+    ['Thème', val(data.titre)],
+    ['Public', val(data.public)],
+    ['Prérequis', val(data.prereq)],
+    ['Objectifs pédagogiques', data.objectifs.length ? data.objectifs.map(o=>arrow(o)) : [dottedLine()]],
+    ['Durée', val(data.duree)],
+    ['Participants', val(data.participants)],
+    ['Matériel', data.materiel.map(m=>arrow(m))],
+  ];
+  out.push(table(wi, infos.map(([k, v])=>row([
+    cell([para(k, { bold:true, after:0 })], wi[0], { fill:COLORS.BG_BLU }),
+    cell(v, wi[1]),
+  ]))));
+
+  out.push(heading('Déroulé minuté'));
+  const wd = [950, 950, 2150, CW-4050];
+  out.push(table(wd, [
+    headerRow(['Horaire','Durée','Phase','Activité'], wd),
+    ...data.phases.map(p=>{
+      const k = p.etape === null ? null : KOLB[p.etape];
+      const activite = [];
+      p.texte.filter(Boolean).forEach(t=>activite.push(para(t, { size:10, after:40 })));
+      (p.puces||[]).forEach(t=>activite.push(bullet(t, { size:10 })));
+      (p.slides||[]).forEach(s=>{
+        activite.push(para(s.titre, { size:10, bold:true, after:20 }));
+        s.bullets.forEach(b=>activite.push(arrow(b, { size:9.5 })));
+      });
+      return row([
+        cell([para(p.heure, { bold:true, size:10, after:0 })], wd[0]),
+        cell([para(`${p.min} min`, { bold:true, size:10, color:COLORS.BLU, after:0 })], wd[1]),
+        cell([
+          para(p.phase, { bold:true, size:10.5, after:20 }),
+          ...(k ? [para(`${p.etape+1}. ${k.nom}`, { size:9.5, italic:true, after:0 })] : []),
+        ], wd[2], { fill: k ? k.fill : 'F2F2F2' }),
+        cell(activite, wd[3]),
+      ]);
+    }),
+  ]));
+
+  out.push(heading('Évaluation'));
+  [
+    'À chaud : questionnaire de satisfaction et d’auto-évaluation (je sais faire / pas encore).',
+    'Observation : chaque participant a-t-il réalisé l’application de l’étape 4 ?',
+    'À froid : relance à 1 mois pour vérifier l’usage réel.',
+  ].forEach(t=>out.push(bullet(t)));
+
+  out.push(heading('Notes de l’animateur'));
+  // Un tableau plutôt que des paragraphes : Word fusionne les bordures de paragraphes consécutifs.
+  const dotted = { style:D.BorderStyle.DOTTED, size:6, color:'A6A6A6' };
+  out.push(table([CW], Array.from({ length:5 }, ()=>new D.TableRow({
+    height:{ value:480, rule:D.HeightRule.ATLEAST },
+    children:[cell([], CW, { borders:{ top:NONE, left:NONE, right:NONE, bottom:dotted } })],
+  })), { noBorders:true }));
+  return makeDocument(out, logos, 'Fiche action Kolb — CD47 Service Inclusion Numérique');
+}
+
+async function downloadDoc(doc, fileName){
+  const blob = await D.Packer.toBlob(doc);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fileName;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+}
+
+/* ════════════════════════════════════════════════════════════
+   5. INTERFACE
+   ════════════════════════════════════════════════════════════ */
+
+const dropEl = document.getElementById('drop');
+const fileInput = document.getElementById('file-input');
+const fileNameEl = document.getElementById('file-name');
+const summaryCard = document.getElementById('summary-card');
+const kolbCard = document.getElementById('kolb-card');
+const genCard = document.getElementById('gen-card');
+const versionsEl = document.getElementById('versions');
+const buttons = ['btn-fiche','btn-memo','btn-kolb'].map(id=>document.getElementById(id));
+const statusEl = document.getElementById('status');
+
+let state = { slidesData:null, meta:null, versions:null, selectedVersion:'1h30', baseName:'atelier' };
+
+['dragover','dragenter'].forEach(ev=>dropEl.addEventListener(ev, e=>{ e.preventDefault(); dropEl.classList.add('drag'); }));
+['dragleave','drop'].forEach(ev=>dropEl.addEventListener(ev, e=>{ e.preventDefault(); dropEl.classList.remove('drag'); }));
+dropEl.addEventListener('drop', e=>{
+  const f = e.dataTransfer.files[0];
+  if(f) handleFile(f);
+});
+fileInput.addEventListener('change', e=>{
+  const f = e.target.files[0];
+  if(f) handleFile(f);
+});
+
+function setStatus(msg, cls){
+  statusEl.textContent = msg || '';
+  statusEl.className = 'status' + (cls ? ' '+cls : '');
+}
+function setButtons(enabled){ buttons.forEach(b=>b.disabled = !enabled); }
+
+async function handleFile(file){
+  if(!/\.pptx$/i.test(file.name)){
+    setStatus("Le fichier doit être un .pptx", 'err');
+    return;
+  }
+  fileNameEl.textContent = file.name;
+  state.baseName = file.name.replace(/\.pptx$/i,'').replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-+|-+$/g,'') || 'atelier';
+  setStatus('Lecture du PPTX…', 'busy');
+  setButtons(false);
+  [summaryCard, kolbCard, genCard].forEach(c=>c.classList.remove('show'));
+
+  try{
+    state.slidesData = await parsePptx(file);
+    state.meta = analyzeSlides(state.slidesData);
+    state.versions = computeVersions(state.meta);
+    renderSummary();
+    setStatus('', '');
+  }catch(err){
+    console.error(err);
+    setStatus("Erreur de lecture : " + err.message, 'err');
+  }
+}
+
+function renderSummary(){
+  const titre = getSlideTitle(state.slidesData[0]) || '(sans titre)';
+  document.getElementById('sum-titre').textContent = titre;
+  document.getElementById('sum-slides').textContent = state.slidesData.length;
+  document.getElementById('sum-duree').textContent = state.versions.complet.label;
+
+  versionsEl.innerHTML = '';
+  ['1h','1h30','complet'].forEach(vk=>{
+    const row = document.createElement('label');
+    row.className = 'ver-opt' + (vk === state.selectedVersion ? ' sel' : '');
+    row.innerHTML = `<input type="radio" name="ver" value="${vk}" ${vk===state.selectedVersion?'checked':''}> ${state.versions[vk].label}`;
+    row.querySelector('input').addEventListener('change', ()=>{
+      state.selectedVersion = vk;
+      versionsEl.querySelectorAll('.ver-opt').forEach(el=>el.classList.remove('sel'));
+      row.classList.add('sel');
+    });
+    versionsEl.appendChild(row);
+  });
+
+  [summaryCard, kolbCard, genCard].forEach(c=>c.classList.add('show'));
+  setButtons(true);
+}
+
+function readKolbForm(){
+  const v = id=>document.getElementById(id).value;
+  const n = (id, def)=>{ const x = parseInt(v(id), 10); return x > 0 ? x : def; };
+  return {
+    exp:v('k-exp'), expMin:n('k-exp-min', 20),
+    obs:v('k-obs'), obsMin:n('k-obs-min', 15),
+    app:v('k-app'), appMin:n('k-app-min', 20),
+    public:v('k-public'), prereq:v('k-prereq'), part:v('k-part'),
+  };
+}
+
+async function generate(label, build){
+  setButtons(false);
+  setStatus(`Génération : ${label}…`, 'busy');
+  try{
+    const logos = await loadLogos();
+    const missing = Object.keys(logos).filter(k=>!logos[k]);
+    await build(logos);
+    setStatus(missing.length
+      ? `✓ ${label} téléchargé(e) — logos introuvables (${missing.join(', ')}) : ouvrir la page depuis son adresse web.`
+      : `✓ ${label} téléchargé(e).`, missing.length ? 'err' : 'ok');
+  }catch(err){
+    console.error(err);
+    setStatus("Erreur de génération : " + err.message, 'err');
+  }
+  setButtons(true);
+}
+
+buttons[0].addEventListener('click', ()=>generate('Fiche Action', async logos=>{
+  const indices = state.versions[state.selectedVersion].indices;
+  const data = extractFiche(state.slidesData, state.meta, indices);
+  await downloadDoc(buildFiche(data, logos), `${state.baseName}-fiche-${state.selectedVersion}.docx`);
+}));
+
+buttons[1].addEventListener('click', ()=>generate('Mémo participant', async logos=>{
+  const indices = state.versions[state.selectedVersion].indices;
+  const data = extractMemo(state.slidesData, state.meta, indices);
+  await downloadDoc(buildMemo(data, logos), `${state.baseName}-memo.docx`);
+}));
+
+buttons[2].addEventListener('click', ()=>generate('Fiche action Kolb', async logos=>{
+  const form = readKolbForm();
+  if(!form.exp.trim()) throw new Error("renseigne la consigne de mise en situation (étape 1).");
+  const indices = state.versions[state.selectedVersion].indices;
+  const data = extractKolb(state.slidesData, state.meta, indices, form);
+  await downloadDoc(buildKolb(data, logos), `${state.baseName}-kolb-${state.selectedVersion}.docx`);
+}));
+</script>
+</body>
+</html>
