@@ -85,6 +85,8 @@
     <div class="summary-row"><span>Slides</span><b id="sum-slides"></b></div>
     <div class="summary-row"><span>Durée totale (complet)</span><b id="sum-duree"></b></div>
 
+    <label class="ver-opt" style="margin-top:14px"><input type="checkbox" id="k-gabarit"> <span id="gabarit-label"></span></label>
+
     <div class="versions" id="versions"></div>
   </div>
 
@@ -93,7 +95,8 @@
     <div class="hint" style="margin:0 0 14px">
       Le PPTX alimente l'apport (étape 3) et les exercices (étape 4).
       La mise en situation et le retour collectif relèvent de l'animateur : à saisir ici.
-      Utilisé uniquement pour la Fiche Kolb.
+      Utilisé uniquement pour la Fiche Kolb. En version 1h ou 1h30, la fiche Kolb tient dans cette durée :
+      les slides qui ne rentrent pas sont listées « si le temps le permet ».
     </div>
     <div class="kolb-step">
       <div class="row2">
@@ -186,25 +189,53 @@ async function parsePptx(file){
   return slides;
 }
 
+function elementChildren(node){
+  return Array.from(node.childNodes).filter(c=>c.nodeType === 1);
+}
+function paragraphsOf(node){
+  return Array.from(node.getElementsByTagName('a:p')).map(ap=>
+    Array.from(ap.getElementsByTagName('a:t')).map(t=>t.textContent).join('')
+  );
+}
+
+// Parcourt l'arbre des formes dans l'ordre du document (groupes compris).
+// Chaque forme texte garde sa position (EMU) pour reconnaître les tableaux dessinés en zones de texte.
 function parseSlideXml(doc, idx){
-  const spList = Array.from(doc.getElementsByTagName('p:sp'));
   const shapes = [];
-  for(const sp of spList){
-    let isTitle = false;
-    const ph = sp.getElementsByTagName('p:ph')[0];
-    if(ph){
-      const type = ph.getAttribute('type');
-      if(type === 'title' || type === 'ctrTitle') isTitle = true;
+  const walk = node=>{
+    for(const el of elementChildren(node)){
+      if(el.nodeName === 'p:grpSp'){ walk(el); continue; }
+      if(el.nodeName === 'p:sp'){
+        const ph = el.getElementsByTagName('p:ph')[0];
+        const type = ph ? ph.getAttribute('type') : null;
+        const txBody = el.getElementsByTagName('p:txBody')[0];
+        if(!txBody) continue;
+        const off = el.getElementsByTagName('a:off')[0];
+        shapes.push({
+          isTitle: type === 'title' || type === 'ctrTitle',
+          paragraphs: paragraphsOf(txBody),
+          x: off ? Number(off.getAttribute('x')) : null,
+          y: off ? Number(off.getAttribute('y')) : null,
+        });
+        continue;
+      }
+      if(el.nodeName === 'p:graphicFrame'){
+        const tbl = el.getElementsByTagName('a:tbl')[0];
+        if(!tbl) continue;
+        const rows = Array.from(tbl.getElementsByTagName('a:tr')).map(tr=>
+          Array.from(tr.getElementsByTagName('a:tc')).map(tc=>paragraphsOf(tc).join(' ').trim())
+        );
+        shapes.push({ isTitle:false, paragraphs:[], rows });
+      }
     }
-    const txBody = sp.getElementsByTagName('p:txBody')[0];
-    if(!txBody) continue;
-    const paragraphs = Array.from(txBody.getElementsByTagName('a:p')).map(ap=>
-      Array.from(ap.getElementsByTagName('a:t')).map(t=>t.textContent).join('')
-    );
-    shapes.push({ isTitle, paragraphs });
-  }
+  };
+  const tree = doc.getElementsByTagName('p:spTree')[0];
+  if(tree) walk(tree);
   return { n: idx, shapes };
 }
+
+// « ÉTAPE 1 SUR 3 » : compteur de progression, pas un titre.
+const COUNTER_RE = /^étape\s*(\d+)\s*(sur|\/)\s*\d+$/i;
 
 function getSlideTitle(slide){
   const titleShape = slide.shapes.find(s=>s.isTitle);
@@ -212,31 +243,38 @@ function getSlideTitle(slide){
     const t = titleShape.paragraphs.join('\n').trim();
     if(t) return t;
   }
-  for(const s of slide.shapes){
-    const t = s.paragraphs.join('\n').trim();
-    if(t && t.length < 120) return t.split('\n')[0].trim();
-  }
-  return '(sans titre)';
+  const firsts = slide.shapes
+    .map(s=>s.paragraphs.map(p=>p.trim()).find(Boolean))
+    .filter(t=>t && t.length < 120);
+  if(!firsts.length) return '(sans titre)';
+  const m = firsts[0].match(COUNTER_RE);
+  if(m && firsts[1]) return `Étape ${m[1]} — ${firsts[1]}`;
+  return firsts[0];
 }
 
 /* ════════════════════════════════════════════════════════════
    2. ANALYSE (port de analyze_pptx.py)
    ════════════════════════════════════════════════════════════ */
 
-function classifyRole(title, idx){
+function classifyRole(title, idx, hasBody){
   const t = title.toLowerCase();
   if(idx === 0) return 'titre';
   if(['programme','au menu','sommaire','objectif'].some(w=>t.includes(w))) return 'intro';
-  if(['chapitre','partie','module','étape'].some(w=>t.includes(w))) return 'chapitre';
+  // Slide sans texte hors titre : séparateur de partie, pas du contenu.
+  if(!hasBody) return 'section';
+  if(/^étape\s*\d/i.test(t)) return 'etape';
+  if(['chapitre','partie','module'].some(w=>t.includes(w))) return 'chapitre';
   if(['démo','demo','pratique','exercice','manipulation','tutoriel'].some(w=>t.includes(w))) return 'demo';
   if(['pour aller plus loin','ressource','bilan','conclusion','récap','merci','questions fréquentes'].some(w=>t.includes(w))) return 'conclusion';
   return 'contenu';
 }
 
-const DURATION = { titre:2, intro:4, chapitre:2, demo:12, contenu:8, conclusion:5 };
+// 'etape' : pas-à-pas pratique (« Étape N : … »), traité comme une démonstration courte.
+const DURATION = { titre:2, intro:4, section:0, chapitre:2, etape:5, demo:12, contenu:8, conclusion:5 };
+const PRATIQUE = new Set(['demo','etape']);
 
 function postProcessRoles(slides){
-  const body = slides.filter(s=>!['titre','intro','conclusion'].includes(s.role));
+  const body = slides.filter(s=>!['titre','intro','conclusion','section'].includes(s.role));
   if(body.length){
     const chapCount = body.filter(s=>s.role==='chapitre').length;
     if(chapCount / body.length > 0.5){
@@ -261,7 +299,7 @@ function minsLabel(m){
 function computeVersions(slides){
   const allIdx = slides.map(s=>s.n);
   const total = slides.reduce((a,s)=>a+s.min,0);
-  const mustKeep = s=>['titre','intro','chapitre'].includes(s.role);
+  const mustKeep = s=>['titre','intro','chapitre','section'].includes(s.role);
 
   let v1h30 = slides.filter(s=>!s.optionnel);
   let dur = v1h30.reduce((a,s)=>a+s.min,0);
@@ -291,22 +329,28 @@ function computeVersions(slides){
   };
 }
 
-function analyzeSlides(slidesData){
+// Bloc gabarit du Département : slides 2 à 4 (présentation) + 2 dernières (clôture).
+// Détecté si au moins 2 des slides 2 à 4 parlent du Département / du réseau.
+const GABARIT_RE = /d[ée]partement|lot-et-garonne|conseill[eè]r?e?s? num[ée]riques?|d[ée]clic/i;
+function detectGabarit(slidesData){
+  return slidesData.slice(1, 4).filter(s=>GABARIT_RE.test(getSlideTitle(s))).length >= 2;
+}
+
+function analyzeSlides(slidesData, excludeGabarit){
   let slides = slidesData.map((s,i)=>{
     const titre = getSlideTitle(s);
-    const role = classifyRole(titre, i);
+    const role = classifyRole(titre, i, slideItems(s, titre).length > 0);
     return { n: i+1, titre, role, min: DURATION[role] ?? 8, optionnel: false };
   });
   slides = postProcessRoles(slides);
 
-  // Les 4 premières et les 2 dernières slides sont le bloc fixe du gabarit
-  // (présentation du Département + clôture), présent sur tous les PPTX concernés
-  // par ce flux — toujours hors contenu d'atelier, quel que soit leur titre.
-  const total = slides.length;
-  slides.forEach((s,i)=>{
-    const n = i+1;
-    if((n > 1 && n <= 4) || n > total - 2){ s.role = 'hors_contenu'; s.min = 0; }
-  });
+  if(excludeGabarit){
+    const total = slides.length;
+    slides.forEach((s,i)=>{
+      const n = i+1;
+      if((n > 1 && n <= 4) || n > total - 2){ s.role = 'hors_contenu'; s.min = 0; }
+    });
+  }
 
   slides.forEach(s=>{ s.optionnel = isOptionalSlide(s); });
   return slides;
@@ -317,7 +361,7 @@ function analyzeSlides(slidesData){
    ════════════════════════════════════════════════════════════ */
 
 function cleanText(text){
-  return (text || '').replace(/[^\x00-\x7FÀ-ɏ‘’–—«»]/g, '').trim();
+  return (text || '').replace(/[^\x00-\x7FÀ-ɏ‘’“”–—«»€…°]/g, '').replace(/\s+/g,' ').trim();
 }
 function trunc(t, n){ return t.length > n ? t.slice(0,n) + '…' : t; }
 function normLoose(t){ return (t||'').replace(/[^a-zA-Z0-9À-ɏ_\s]/g,'').toLowerCase().trim(); }
@@ -335,43 +379,143 @@ const CONSEILS_DEFAULT = [
   "Terminer en distribuant la fiche mémo — c'est le support qu'ils garderont.",
 ];
 
-function getFirstBullet(slide, title){
-  for(const shape of slide.shapes){
-    for(const para of shape.paragraphs){
-      const t = para.trim();
-      if(t && t !== title && t.length > 10) return cleanText(t);
-    }
+// Textes sans valeur pour le participant : numéros de pastille, durées, tirets, consignes de maquette.
+function isJunk(t){
+  return !t || /^\d{1,2}\.?$/.test(t) || /^\d+\s*min$/i.test(t) || /^[—–-]+$/.test(t)
+    || COUNTER_RE.test(t) || /illustration à ajouter|contenu manquant/i.test(t);
+}
+
+// Tableau dessiné en zones de texte : au moins 3 lignes d'au moins 3 cases aux mêmes colonnes.
+function findGridRows(shapes){
+  const cells = shapes.filter(s=>!s.isTitle && s.y !== null && s.paragraphs.filter(p=>p.trim()).length === 1);
+  const TOL = 60000; // ≈ 1,7 mm
+  const rows = [];
+  for(const c of cells){
+    let r = rows.find(r=>Math.abs(r.y - c.y) <= TOL);
+    if(!r){ r = { y:c.y, cells:[] }; rows.push(r); }
+    r.cells.push(c);
   }
-  return '';
+  const colKey = r=>r.cells.map(c=>Math.round(c.x / 100000)).sort((a,b)=>a-b).join(',');
+  const wide = rows.filter(r=>r.cells.length >= 3);
+  const byCols = {};
+  wide.forEach(r=>{ (byCols[colKey(r)] = byCols[colKey(r)] || []).push(r); });
+  const grid = Object.values(byCols).find(g=>g.length >= 3);
+  if(!grid) return null;
+  grid.sort((a,b)=>a.y-b.y);
+  grid.forEach(r=>r.cells.sort((a,b)=>a.x-b.x));
+  return grid;
+}
+
+// « Intitulé : explication » ; une question ou une exclamation se suffit : simple espace.
+function joinPair(label, text){
+  const l = label.replace(/\s*:$/,'');
+  return /[?!]$/.test(l) ? `${l} ${text}` : `${l} : ${text}`;
+}
+
+function formatRow(cells){
+  const parts = cells.map(c=>cleanText(c)).filter(t=>!isJunk(t));
+  if(!parts.length) return '';
+  return parts.length === 1 ? parts[0] : `${parts[0]} : ${parts.slice(1).join(' — ')}`;
+}
+
+// Contenu d'une slide, dans l'ordre de lecture, sous forme de puces prêtes à l'emploi :
+// - un intitulé court suivi de son explication donne « Intitulé : explication » ;
+// - un tableau (réel ou dessiné) donne une puce par ligne, en-tête exclu ;
+// - un intitulé court suivi d'un autre intitulé est un sous-titre (kind 'head').
+function slideItems(slide, title){
+  const titleNorm = normLoose(title);
+  const grid = findGridRows(slide.shapes);
+  const gridShapes = new Map();
+  if(grid){
+    const isHeader = grid[0].cells.every(c=>cleanText(c.paragraphs.join(' ')).length <= 25);
+    grid.forEach((r,i)=>r.cells.forEach((c,j)=>gridShapes.set(c, { row:r, first:j === 0, header: isHeader && i === 0 })));
+  }
+
+  const raw = [];
+  for(const s of slide.shapes){
+    if(s.isTitle) continue;
+    if(s.rows){
+      s.rows.slice(1).forEach(r=>{ const t = formatRow(r); if(t) raw.push({ text:t, kind:'row' }); });
+      continue;
+    }
+    const g = gridShapes.get(s);
+    if(g){
+      if(g.first && !g.header){
+        const t = formatRow(g.row.cells.map(c=>c.paragraphs.join(' ')));
+        if(t) raw.push({ text:t, kind:'row' });
+      }
+      continue;
+    }
+    const paras = s.paragraphs.map(cleanText).filter(t=>{
+      if(isJunk(t)) return false;
+      const n = normLoose(t);
+      return !(n === titleNorm || (n.length > 3 && titleNorm.includes(n)));
+    });
+    // Deux paragraphes dans la même zone = un intitulé et son explication.
+    if(paras.length === 2){ raw.push({ text: joinPair(paras[0], paras[1]), kind:'pair' }); continue; }
+    paras.forEach(t=>raw.push({ text:t }));
+  }
+
+  const isShort = t=>t.length <= 45 && !/[.!?]$/.test(t);
+  // Un intitulé court annonce l'explication qui suit si elle est nettement plus longue.
+  const explains = (cur, next)=>!isShort(next.text) || (cur.text.length <= 25 && next.text.length >= cur.text.length + 15);
+  // Suivi d'au moins 3 phrases longues d'affilée, c'est un sous-titre de liste (« À éviter absolument »),
+  // pas l'intitulé de la seule première phrase.
+  const longRun = from=>{ let k = 0; while(raw[from+k] && !raw[from+k].kind && !isShort(raw[from+k].text)) k++; return k; };
+  const items = [];
+  for(let i=0;i<raw.length;i++){
+    const cur = raw[i], next = raw[i+1];
+    if(cur.kind){ items.push(cur); continue; }
+    if(isShort(cur.text)){
+      if(next && !next.kind && explains(cur, next) && longRun(i+1) >= 3){
+        items.push({ text:cur.text.replace(/\s*:$/,'') + ' :', kind:'head' });
+      } else if(next && !next.kind && explains(cur, next)){
+        items.push({ text:joinPair(cur.text, next.text), kind:'pair' });
+        i++;
+      } else if(next && !next.kind){
+        items.push({ text:cur.text.replace(/\s*:$/,'') + ' :', kind:'head' });
+      } else if(cur.text.length >= 10){
+        items.push({ text:cur.text, kind:'long' });
+      }
+      continue;
+    }
+    items.push({ text:cur.text, kind:'long' });
+  }
+  return items;
+}
+
+function getFirstBullet(slide, title){
+  const it = slideItems(slide, title).find(i=>i.kind !== 'head');
+  return it ? it.text : '';
 }
 function getBullets(slide, title, maxB=3){
-  const bullets = [];
-  for(const shape of slide.shapes){
-    for(const para of shape.paragraphs){
-      const t = para.trim();
-      if(t && t !== title && t.length > 10){
-        bullets.push(cleanText(t));
-        if(bullets.length >= maxB) return bullets;
-      }
-    }
-  }
-  return bullets;
+  return slideItems(slide, title).filter(i=>i.kind !== 'head').slice(0, maxB).map(i=>i.text);
 }
-function getMemoBullets(slide, title, maxB=4){
-  const bullets = [];
-  const titleNorm = normLoose(title);
-  for(const shape of slide.shapes){
-    for(const para of shape.paragraphs){
-      const t = cleanText(para.trim());
-      if(t.length < 10) continue;
-      const tNorm = normLoose(t);
-      if(tNorm === titleNorm || titleNorm.includes(tNorm) || tNorm.includes(titleNorm)) continue;
-      bullets.push(t);
-      if(bullets.length >= maxB) break;
-    }
-    if(bullets.length >= maxB) break;
+function getMemoBullets(slide, title, maxB=10){
+  const items = slideItems(slide, title);
+  // Un sous-titre n'est gardé que s'il introduit au moins une puce.
+  const kept = items.filter((it,i)=>it.kind !== 'head' || (items[i+1] && items[i+1].kind !== 'head')).slice(0, maxB);
+  while(kept.length && kept[kept.length-1].kind === 'head') kept.pop();
+  return kept.map(i=>i.text);
+}
+
+// Objectifs : les lignes de la slide Sommaire / Programme si elle existe,
+// sinon les titres des premières slides de contenu.
+function getObjectifs(slidesData, slidesMeta){
+  const i = slidesMeta.findIndex(m=>m.role === 'intro');
+  if(i >= 0){
+    const title = normLoose(slidesMeta[i].titre);
+    const lines = [];
+    slidesData[i].shapes.filter(s=>!s.isTitle).forEach(s=>s.paragraphs.forEach(p=>{
+      const t = cleanText(p);
+      if(isJunk(t) || t.length < 4 || t.length > 80 || /@|inclusion numérique/i.test(t)) return;
+      if(normLoose(t) === title) return;
+      lines.push(t);
+    }));
+    if(lines.length >= 2) return lines.slice(0, 6);
   }
-  return bullets;
+  return slidesMeta.filter(m=>['contenu','demo','chapitre'].includes(m.role) && m.n > 1)
+    .slice(0, 4).map(m=>cleanText(m.titre));
 }
 
 function extractFiche(slidesData, slidesMeta, indices){
@@ -380,22 +524,18 @@ function extractFiche(slidesData, slidesMeta, indices){
   const pairs = slidesData.map((s,i)=>[s, slidesMeta[i]]).filter(([,m])=> !idxSet || idxSet.has(m.n));
 
   const dureeMin = pairs.reduce((a,[,m])=>a+m.min,0);
-  const h = Math.floor(dureeMin/60), mv = dureeMin%60;
-  const dureeStr = (h && mv) ? `${h}h${String(mv).padStart(2,'0')}` : (h ? `${h}h` : `${mv} min`);
-
-  const content = pairs.filter(([,m])=>['contenu','demo','chapitre'].includes(m.role) && m.n > 1);
-  const objectifs = content.slice(0,4).map(([,m])=>trunc(cleanText(m.titre),55));
-  while(objectifs.length < 4) objectifs.push('');
+  const objectifs = getObjectifs(slidesData, slidesMeta);
 
   const deroule = []; let cumtime = 0;
   for(const [slide, meta] of pairs){
     if(meta.role === 'titre' || meta.role === 'hors_contenu' || meta.role === 'intro'){ cumtime += meta.min; continue; }
     if(meta.optionnel){ cumtime += meta.min; continue; }
+    if(meta.role === 'section'){ deroule.push({ section:true, titre: cleanText(meta.titre) }); continue; }
     const h2 = Math.floor(cumtime/60), m2 = cumtime%60;
     deroule.push({
       heure: `${h2}:${String(m2).padStart(2,'0')}`,
       min: meta.min,
-      titre: trunc(cleanText(meta.titre),48),
+      titre: trunc(cleanText(meta.titre),90),
       bullet: getFirstBullet(slide, meta.titre),
     });
     cumtime += meta.min;
@@ -404,55 +544,62 @@ function extractFiche(slidesData, slidesMeta, indices){
   const optRaw = slidesMeta.map((m,i)=>[slidesData[i],m])
     .filter(([,m])=> m.optionnel && m.role !== 'titre' && m.role !== 'hors_contenu' && (!idxSet || !idxSet.has(m.n)));
   const optionnels = optRaw.map(([s,m])=>({
-    min: m.min, titre: trunc(cleanText(m.titre),38), bullets: getBullets(s, m.titre, 3),
+    min: m.min, titre: trunc(cleanText(m.titre),60), bullets: getBullets(s, m.titre, 3),
   }));
 
-  return { titre, duree: dureeStr, objectifs, materiel: MATERIEL_DEFAULT, deroule, optionnels, conseils: CONSEILS_DEFAULT };
+  return { titre, duree: minsLabel(dureeMin), objectifs, materiel: MATERIEL_DEFAULT, deroule, optionnels, conseils: CONSEILS_DEFAULT };
 }
 
 function extractMemo(slidesData, slidesMeta, indices){
   const idxSet = (indices && indices.length) ? new Set(indices) : null;
-  const rolesSteps = new Set(['contenu','demo']);
+  const rolesSteps = new Set(['contenu','demo','etape']);
 
+  // Une slide sans puce exploitable n'apparaît pas : jamais d'étape « à compléter ».
   const steps = [];
   slidesMeta.forEach((meta,i)=>{
     if(!rolesSteps.has(meta.role)) return;
     if(meta.optionnel) return;
     if(idxSet && !idxSet.has(meta.n)) return;
-    const slide = slidesData[i];
-    const bullets = getMemoBullets(slide, meta.titre, 4);
-    steps.push({ titre: cleanText(meta.titre), bullets: bullets.length ? bullets : ['Contenu à compléter'] });
+    const bullets = getMemoBullets(slidesData[i], meta.titre);
+    if(bullets.length) steps.push({ titre: cleanText(meta.titre), bullets });
   });
 
-  let titreRaw = '';
-  for(const shape of slidesData[0].shapes){
-    const t = shape.paragraphs.join('\n').trim();
-    if(t && t.length < 120){ titreRaw = t.split('\n')[0].trim(); break; }
-  }
-  const titre = trunc(cleanText(titreRaw), 60);
+  const titre = cleanText(getSlideTitle(slidesData[0]));
 
   const bsa = [];
   slidesMeta.forEach((meta,i)=>{
     if(!meta.optionnel) return;
-    if(['titre','chapitre','hors_contenu'].includes(meta.role)) return;
+    if(['titre','chapitre','section','hors_contenu'].includes(meta.role)) return;
     if(idxSet && idxSet.has(meta.n)) return;
-    const slide = slidesData[i];
-    const bullets = getMemoBullets(slide, meta.titre, 4);
-    bsa.push({ titre: cleanText(meta.titre), bullets: bullets.length ? bullets : ['Contenu à compléter'] });
+    const bullets = getMemoBullets(slidesData[i], meta.titre);
+    if(bullets.length) bsa.push({ titre: cleanText(meta.titre), bullets });
   });
 
   return { titre, steps, bsa };
 }
 
-function extractKolb(slidesData, slidesMeta, indices, form){
-  const titre = cleanText(getSlideTitle(slidesData[0]));
-  const idxSet = indices ? new Set(indices) : null;
-  const pairs = slidesData.map((s,i)=>[s, slidesMeta[i]])
-    .filter(([,m])=> (!idxSet || idxSet.has(m.n)) && !m.optionnel && !['titre','hors_contenu','intro'].includes(m.role));
+const KOLB_BUDGET = { '1h':60, '1h30':90, 'complet':null };
 
-  const toItem = ([slide, meta])=>({ titre: trunc(cleanText(meta.titre),60), bullets: getBullets(slide, meta.titre, 2) });
-  const apportPairs = pairs.filter(([,m])=>['contenu','chapitre'].includes(m.role));
-  const pratiquePairs = pairs.filter(([,m])=>m.role === 'demo');
+// Garde les slides dans l'ordre tant qu'elles tiennent dans le temps imparti (au moins une) ;
+// les autres sont listées « si le temps le permet », jamais supprimées en silence.
+function fitSlides(pairs, minutes){
+  const keep = [], rest = []; let used = 0;
+  for(const p of pairs){
+    if(!keep.length || used + p[1].min <= minutes){ keep.push(p); used += p[1].min; }
+    else rest.push(p);
+  }
+  return { keep, rest };
+}
+
+function extractKolb(slidesData, slidesMeta, versionKey, form){
+  const titre = cleanText(getSlideTitle(slidesData[0]));
+  // La fiche Kolb fait sa propre sélection dans le temps imparti : elle part de toutes les slides.
+  const pairs = slidesData.map((s,i)=>[s, slidesMeta[i]])
+    .filter(([,m])=> !m.optionnel && ['contenu','chapitre','demo','etape'].includes(m.role));
+
+  const toItem = ([slide, meta])=>({ titre: cleanText(meta.titre), bullets: getBullets(slide, meta.titre, 2) });
+  const apportPairs = pairs.filter(([,m])=>!PRATIQUE.has(m.role));
+  const pratiquePairs = pairs.filter(([,m])=>PRATIQUE.has(m.role));
 
   if(!apportPairs.length){
     throw new Error("Le PPTX ne contient aucune slide d'apport pour l'étape 3 (conceptualisation) : la fiche Kolb ne peut pas être construite sur ce support.");
@@ -462,28 +609,41 @@ function extractKolb(slidesData, slidesMeta, indices, form){
     throw new Error("Le PPTX ne contient aucune slide d'exercice : renseigne la consigne d'application (étape 4).");
   }
 
-  const objectifs = apportPairs.concat(pratiquePairs).slice(0,4).map(([,m])=>trunc(cleanText(m.titre),70));
   const sum = lst=>lst.reduce((a,[,m])=>a+m.min,0);
+  const budget = KOLB_BUDGET[versionKey] ?? null;
+  const ouverture = budget === 60 ? 5 : 10;
+  let apportMin = sum(apportPairs);
+  let appMin = pratiquePairs.length ? sum(pratiquePairs) : form.appMin;
+  let apport = { keep:apportPairs, rest:[] }, pratique = { keep:pratiquePairs, rest:[] };
+  if(budget){
+    const reste = Math.max(20, budget - 2*ouverture - form.expMin - form.obsMin);
+    if(apportMin + appMin > reste){
+      appMin = Math.min(appMin, Math.max(10, Math.round(reste * 0.4)));
+      apportMin = reste - appMin;
+      apport = fitSlides(apportPairs, apportMin);
+      if(pratiquePairs.length) pratique = fitSlides(pratiquePairs, appMin);
+    }
+  }
 
   const phases = [
-    { phase:'Accueil', etape:null, min:10,
+    { phase:'Accueil', etape:null, min:ouverture,
       texte:['Tour de table, recueil des attentes, présentation du déroulé.'] },
     { phase:'Mise en situation', etape:0, min:form.expMin,
       texte:[form.exp.trim(), "L'animateur observe sans intervenir et note les points de blocage."] },
     { phase:'Retour collectif', etape:1, min:form.obsMin,
       texte:['Questions posées au groupe :'], puces: form.obs.split('\n').map(s=>s.trim()).filter(Boolean) },
-    { phase:'Apport', etape:2, min:sum(apportPairs) || 15,
-      texte: [], slides: apportPairs.map(toItem) },
-    { phase:'Application', etape:3, min: pratiquePairs.length ? sum(pratiquePairs) : form.appMin,
-      texte: consigneApp ? [consigneApp] : [], slides: pratiquePairs.map(toItem) },
-    { phase:'Clôture', etape:null, min:10,
+    { phase:'Apport', etape:2, min:apportMin,
+      texte:[], slides: apport.keep.map(toItem), reste: apport.rest.map(([,m])=>cleanText(m.titre)) },
+    { phase:'Application', etape:3, min:appMin,
+      texte: consigneApp ? [consigneApp] : [], slides: pratique.keep.map(toItem), reste: pratique.rest.map(([,m])=>cleanText(m.titre)) },
+    { phase:'Clôture', etape:null, min:ouverture,
       texte:['Bilan à chaud, réponses aux questions, remise du mémo participant, questionnaire d’évaluation.'] },
   ];
   let cum = 0;
   phases.forEach(p=>{ p.heure = `${Math.floor(cum/60)}:${String(cum%60).padStart(2,'0')}`; cum += p.min; });
 
   return {
-    titre, duree: minsLabel(cum), objectifs, phases, materiel: MATERIEL_DEFAULT,
+    titre, duree: minsLabel(cum), objectifs: getObjectifs(slidesData, slidesMeta), phases, materiel: MATERIEL_DEFAULT,
     public: form.public.trim(), prereq: form.prereq.trim(), participants: form.part.trim(),
   };
 }
@@ -669,7 +829,14 @@ function buildFiche(data, logos){
   const wd = [1100, 900, CW-2000];
   out.push(table(wd, [
     headerRow(['Horaire','Durée','Séquence et contenu'], wd),
-    ...data.deroule.map(s=>row([
+    ...data.deroule.map(s=> s.section
+      ? row([new D.TableCell({
+          columnSpan:3, width:{ size:CW, type:D.WidthType.DXA }, borders:lineBorders(COLORS.BD_STP),
+          shading:{ type:D.ShadingType.CLEAR, fill:COLORS.BG_BLU, color:'auto' },
+          margins:{ top:70, bottom:70, left:140, right:140 },
+          children:[para(s.titre, { bold:true, size:11, color:COLORS.BLU, after:0 })],
+        })])
+      : row([
       cell([para(s.heure, { bold:true, size:10, after:0 })], wd[0], { fill:COLORS.BG_STP }),
       cell([para(`${s.min} min`, { bold:true, size:10, color:COLORS.BLU, after:0 })], wd[1], { fill:COLORS.BG_STP }),
       cell([para(s.titre, { bold:true, size:10.5, after:s.bullet ? 30 : 0 }), ...(s.bullet ? [para(s.bullet, { size:9.5, after:0 })] : [])], wd[2]),
@@ -706,7 +873,7 @@ function contactBox(){
 }
 
 function buildMemo(data, logos){
-  const steps = data.steps.slice(0, 8);
+  const steps = data.steps;
   const titreDisplay = data.titre.replace(/^(Mon mémo[\s—-]+)/,'');
   const out = docTitle(`Mon mémo — ${titreDisplay}`, steps.slice(0,3).map(s=>s.titre).join(' | '));
 
@@ -715,7 +882,9 @@ function buildMemo(data, logos){
     const [ac, bgc] = i % 2 ? [COLORS.TEA, COLORS.BG_TEA] : [COLORS.BLU, COLORS.BG_BLU];
     out.push(table(ws, [row([
       cell([para(String(i+1), { size:22, bold:true, color:COLORS.WHT, align:D.AlignmentType.CENTER, after:0 })], ws[0], { fill:ac, borders:lineBorders(ac), valign:D.VerticalAlign.CENTER }),
-      cell([para(s.titre, { size:11.5, bold:true, color:ac, after:50 }), ...s.bullets.slice(0,4).map(b=>arrow(b, { color:ac }))], ws[1], { fill:bgc, borders:lineBorders(bgc) }),
+      cell([para(s.titre, { size:11.5, bold:true, color:ac, after:50 }), ...s.bullets.map(b=> /:$/.test(b)
+        ? para(b, { size:10, bold:true, color:ac, before:40, after:20 })
+        : arrow(b, { color:ac }))], ws[1], { fill:bgc, borders:lineBorders(bgc) }),
     ])]));
     out.push(spacer(100));
   });
@@ -809,6 +978,9 @@ function buildKolb(data, logos){
         activite.push(para(s.titre, { size:10, bold:true, after:20 }));
         s.bullets.forEach(b=>activite.push(arrow(b, { size:9.5 })));
       });
+      if(p.reste && p.reste.length){
+        activite.push(para(`Si le temps le permet : ${p.reste.join(' · ')}`, { size:9.5, italic:true, color:COLORS.GRY, before:40, after:0 }));
+      }
       return row([
         cell([para(p.heure, { bold:true, size:10, after:0 })], wd[0]),
         cell([para(`${p.min} min`, { bold:true, size:10, color:COLORS.BLU, after:0 })], wd[1]),
@@ -860,6 +1032,7 @@ const genCard = document.getElementById('gen-card');
 const versionsEl = document.getElementById('versions');
 const buttons = ['btn-fiche','btn-memo','btn-kolb'].map(id=>document.getElementById(id));
 const statusEl = document.getElementById('status');
+const gabaritInput = document.getElementById('k-gabarit');
 
 let state = { slidesData:null, meta:null, versions:null, selectedVersion:'1h30', baseName:'atelier' };
 
@@ -893,17 +1066,13 @@ async function handleFile(file){
 
   try{
     state.slidesData = await parsePptx(file);
-    state.meta = analyzeSlides(state.slidesData);
-    const nContenu = state.meta.filter(m=>['contenu','demo','chapitre'].includes(m.role)).length;
-    if(!nContenu){
-      const portrait = state.slidesData.portrait;
+    if(state.slidesData.portrait){
       state.slidesData = null;
-      throw new Error(portrait
-        ? "aucune slide de contenu trouvée. Ce fichier est au format portrait (A4) : il ressemble à une fiche déjà générée, pas à un support d'atelier. Choisis le PPTX utilisé en animation."
-        : "aucune slide de contenu trouvée (les 4 premières et les 2 dernières slides du gabarit sont exclues). Choisis le PPTX utilisé en animation.");
+      throw new Error("ce fichier est au format portrait (A4) : il ressemble à une fiche déjà générée, pas à un support d'atelier. Choisis le PPTX utilisé en animation.");
     }
-    state.versions = computeVersions(state.meta);
-    renderSummary();
+    state.gabaritDetecte = detectGabarit(state.slidesData);
+    state.gabarit = state.gabaritDetecte;
+    applyAnalysis();
     setStatus('', '');
   }catch(err){
     console.error(err);
@@ -911,11 +1080,46 @@ async function handleFile(file){
   }
 }
 
+function applyAnalysis(){
+  state.meta = analyzeSlides(state.slidesData, state.gabarit);
+  const nContenu = state.meta.filter(m=>['contenu','demo','etape','chapitre'].includes(m.role)).length;
+  if(!nContenu){
+    [kolbCard, genCard].forEach(c=>c.classList.remove('show'));
+    setButtons(false);
+    if(state.gabarit){
+      document.getElementById('sum-titre').textContent = getSlideTitle(state.slidesData[0]);
+      document.getElementById('sum-slides').textContent = state.slidesData.length;
+      document.getElementById('sum-duree').textContent = '—';
+      renderGabarit(); versionsEl.innerHTML = ''; summaryCard.classList.add('show');
+    }
+    else summaryCard.classList.remove('show');
+    throw new Error(state.gabarit
+      ? "aucune slide de contenu trouvée une fois le bloc gabarit exclu. Décoche l'exclusion ou choisis le PPTX utilisé en animation."
+      : "aucune slide de contenu trouvée. Choisis le PPTX utilisé en animation.");
+  }
+  state.versions = computeVersions(state.meta);
+  renderSummary();
+}
+
+gabaritInput.addEventListener('change', ()=>{
+  if(!state.slidesData) return;
+  state.gabarit = gabaritInput.checked;
+  try{ applyAnalysis(); setStatus('', ''); }
+  catch(err){ setStatus("Erreur de lecture : " + err.message, 'err'); }
+});
+
+function renderGabarit(){
+  gabaritInput.checked = state.gabarit;
+  document.getElementById('gabarit-label').textContent =
+    `Exclure le bloc gabarit du Département (slides 2 à 4 et 2 dernières) — ${state.gabaritDetecte ? 'détecté dans ce PPTX' : 'non détecté dans ce PPTX'}`;
+}
+
 function renderSummary(){
   const titre = getSlideTitle(state.slidesData[0]) || '(sans titre)';
   document.getElementById('sum-titre').textContent = titre;
   document.getElementById('sum-slides').textContent = state.slidesData.length;
   document.getElementById('sum-duree').textContent = state.versions.complet.label;
+  renderGabarit();
 
   versionsEl.innerHTML = '';
   ['1h','1h30','complet'].forEach(vk=>{
@@ -977,8 +1181,7 @@ buttons[1].addEventListener('click', ()=>generate('Mémo participant', async log
 buttons[2].addEventListener('click', ()=>generate('Fiche action Kolb', async logos=>{
   const form = readKolbForm();
   if(!form.exp.trim()) throw new Error("renseigne la consigne de mise en situation (étape 1).");
-  const indices = state.versions[state.selectedVersion].indices;
-  const data = extractKolb(state.slidesData, state.meta, indices, form);
+  const data = extractKolb(state.slidesData, state.meta, state.selectedVersion, form);
   await downloadDoc(buildKolb(data, logos), `${state.baseName}-kolb-${state.selectedVersion}.docx`);
 }));
 </script>
