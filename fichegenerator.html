@@ -716,7 +716,7 @@ function extractKolb(slidesData, slidesMeta, versionKey, form){
   const pratiquePairs = pairs.filter(([,m])=>PRATIQUE.has(m.role));
 
   if(!apportPairs.length){
-    throw new Error("Le PPTX ne contient aucune slide d'apport pour l'étape 3 (conceptualisation) : la fiche Kolb ne peut pas être construite sur ce support.");
+    throw new Error("le PPTX ne contient aucune slide d'apport pour l'étape 3 (conceptualisation) : pas de fiche Kolb possible sur ce support. Utilise la Fiche Action et le Mémo participant, qui se génèrent normalement.");
   }
   const consigneApp = form.app.trim();
   if(!pratiquePairs.length && !consigneApp){
