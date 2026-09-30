@@ -54,6 +54,13 @@ Aucune en attente au 30/09/2026.
   les titres des slides retenues, sous l'intertitre de leur partie ; le surplus tient en une
   ligne (« N autres slides dans le support »). Le détail est dans le PPTX, la Fiche Action
   et le mémo.
+- **Mémo raccourci** (option A, 30/09/2026) : 4 puces au plus par étape, explication de plus de
+  150 caractères coupée à sa première phrase. Sur B6 (32 étapes) : 8 pages → 7 ; si c'est encore
+  trop, l'option B restait possible (mémo « essentiel » : pas-à-pas + « Ce qu'il faut retenir »).
+- **Lecture des slides** (B6, 30/09/2026) : une rangée d'au moins 3 cases courtes sans texte
+  dessous = un process (« A → B → C », lu de gauche à droite) ; une zone de 3 lignes ou plus =
+  une liste (pas d'appariement) ; une phrase coupée sur deux paragraphes est recollée ;
+  « étape N » est reconnu n'importe où dans le titre ; un retour à la ligne (a:br) vaut une espace.
 - **Mémo toujours complet**, quelle que soit la version (`-memo-complet.docx`) : c'est le
   document que le participant garde.
 - **Puces** : intitulé court + explication = une puce « Intitulé : explication » ; un

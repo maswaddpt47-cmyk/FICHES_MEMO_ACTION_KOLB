@@ -194,9 +194,13 @@ async function parsePptx(file){
 function elementChildren(node){
   return Array.from(node.childNodes).filter(c=>c.nodeType === 1);
 }
+// Un retour à la ligne dans un paragraphe (a:br) vaut une espace : sans lui, « complémentaire »
+// et « qui » de deux lignes se collaient en « complémentairequi ».
 function paragraphsOf(node){
   return Array.from(node.getElementsByTagName('a:p')).map(ap=>
-    Array.from(ap.getElementsByTagName('a:t')).map(t=>t.textContent).join('')
+    Array.from(ap.getElementsByTagName('*')).map(el=>
+      el.nodeName === 'a:t' ? el.textContent : el.nodeName === 'a:br' ? ' ' : ''
+    ).join('')
   );
 }
 
@@ -264,7 +268,8 @@ function classifyRole(title, idx, hasBody){
   if(['programme','au menu','sommaire','objectif'].some(w=>t.includes(w))) return 'intro';
   // Slide sans texte hors titre : séparateur de partie, pas du contenu.
   if(!hasBody) return 'section';
-  if(/^étape\s*\d/i.test(t)) return 'etape';
+  // « Étape 2 : … » comme « Créer son compte Ameli - étape 1 » (mais pas « Les étapes clés »).
+  if(/(^|[\s—–-])étape\s*\d/i.test(t)) return 'etape';
   if(['chapitre','partie','module'].some(w=>t.includes(w))) return 'chapitre';
   if(['démo','demo','pratique','exercice','manipulation','tutoriel'].some(w=>t.includes(w))) return 'demo';
   if(['pour aller plus loin','ressource','bilan','conclusion','récap','merci','questions fréquentes'].some(w=>t.includes(w))) return 'conclusion';
@@ -448,9 +453,40 @@ function slideItems(slide, title){
     grid.forEach((r,i)=>r.cells.forEach((c,j)=>gridShapes.set(c, { row:r, first:j === 0, header: isHeader && i === 0 })));
   }
 
+  // Process dessiné en une rangée d'au moins 3 cases courtes (« Accéder au site », « Créer le
+  // compte »…) : une seule puce, cases lues de gauche à droite (l'ordre du fichier peut être inversé).
+  const processShapes = new Map();
+  {
+    const single = slide.shapes.filter(sh=>!sh.isTitle && sh.y !== null && !gridShapes.has(sh)
+      && sh.paragraphs.map(cleanText).filter(Boolean).length === 1 && cleanText(sh.paragraphs.join(' ')).length <= 30);
+    const rows = [];
+    single.forEach(sh=>{
+      let r = rows.find(r=>Math.abs(r.y - sh.y) <= 150000);
+      if(!r){ r = { y:sh.y, cells:[] }; rows.push(r); }
+      r.cells.push(sh);
+    });
+    // Une rangée de cartes (intitulé + explication juste en dessous, même colonne) n'est pas un process.
+    const hasTextBelow = r=>slide.shapes.some(o=>!o.isTitle && o.y !== null && !r.cells.includes(o)
+      && o.y > r.y && o.y - r.y < 720000 && r.cells.filter(c=>Math.abs(c.x - o.x) <= 108000).length > 0);
+    rows.filter(r=>r.cells.length >= 3 && !hasTextBelow(r)).forEach(r=>{
+      r.cells.sort((a,b)=>a.x-b.x);
+      r.cells.forEach((c,j)=>processShapes.set(c, j === 0 ? r : null));
+    });
+  }
+
   const raw = [];
+  let processDone = new Set();
   for(const s of slide.shapes){
     if(s.isTitle) continue;
+    if(processShapes.has(s)){
+      const r = [...processShapes.entries()].find(([sh,row])=>row && row.cells.includes(s));
+      const row = r && r[1];
+      if(row && !processDone.has(row)){
+        processDone.add(row);
+        raw.push({ text: row.cells.map(c=>cleanText(c.paragraphs.join(' '))).join(' → '), kind:'row' });
+      }
+      continue;
+    }
     if(s.rows){
       s.rows.slice(1).forEach(r=>{ const t = formatRow(r); if(t) raw.push({ text:t, kind:'row' }); });
       continue;
@@ -463,40 +499,62 @@ function slideItems(slide, title){
       }
       continue;
     }
-    const paras = s.paragraphs.map(cleanText).filter(t=>{
+    const paras = [];
+    s.paragraphs.map(cleanText).filter(t=>{
       if(isJunk(t)) return false;
       const n = normLoose(t);
       return !(n === titleNorm || (n.length > 3 && titleNorm.includes(n)));
+    }).forEach(t=>{
+      // Phrase coupée sur deux paragraphes (« …que vous » / « autorisez… ») : on la recolle.
+      const last = paras.length - 1;
+      if(last >= 0 && !/[.!?:;]$/.test(paras[last]) && /^[a-zà-ÿ]/.test(t)) paras[last] += ' ' + t;
+      else paras.push(t);
     });
-    // Deux paragraphes dans la même zone = un intitulé et son explication.
-    if(paras.length === 2){ raw.push({ text: joinPair(paras[0], paras[1]), kind:'pair' }); continue; }
+    // Deux paragraphes dans la même zone = un intitulé et son explication ;
+    // trois ou plus = une liste : une puce par ligne, sans appariement.
+    if(paras.length === 2 && paras[0].length <= 60 && !/\.$/.test(paras[0])){
+      raw.push({ text: joinPair(paras[0], paras[1]), kind:'pair' }); continue;
+    }
+    if(paras.length >= 3){ paras.forEach(t=>raw.push({ text:t, kind:'list' })); continue; }
     paras.forEach(t=>raw.push({ text:t }));
   }
 
-  const isShort = t=>t.length <= 45 && !/[.!?]$/.test(t);
-  // Un intitulé court annonce l'explication qui suit si elle est nettement plus longue.
-  const explains = (cur, next)=>!isShort(next.text) || (cur.text.length <= 25 && next.text.length >= cur.text.length + 15);
+  const isShort = t=>t.length <= 45 && !/[.!]$/.test(t);
+  const asHead = t=>/\?$/.test(t) ? t : t.replace(/\s*:$/,'') + ' :';
+  // Un intitulé court annonce l'explication qui suit si celle-ci est une phrase (point final) ou
+  // nettement plus longue ; un intitulé très court (« Vérifier », « Payer ») suffit d'une ligne.
+  // Deux éléments de liste de longueur voisine ne forment pas une paire (« Ordonnances médicales »,
+  // « Résultats d'analyses… » sont deux documents, pas un intitulé et son explication).
+  const explains = (cur, next)=>/[.!]$/.test(next.text)
+    || (next.text.length > 45 && next.text.length >= 1.5 * cur.text.length)
+    || (cur.text.length <= 15 && next.text.length >= cur.text.length + 15);
   // Suivi d'au moins 3 phrases longues d'affilée, c'est un sous-titre de liste (« À éviter absolument »),
   // pas l'intitulé de la seule première phrase.
   const longRun = from=>{ let k = 0; while(raw[from+k] && !raw[from+k].kind && !isShort(raw[from+k].text)) k++; return k; };
   const items = [];
+  let inList = false;
   for(let i=0;i<raw.length;i++){
-    const cur = raw[i], next = raw[i+1];
-    if(cur.kind){ items.push(cur); continue; }
+    const cur = raw[i], next = raw[i+1], prev = raw[i-1];
+    if(cur.kind){ items.push(cur); inList = false; continue; }
     if(isShort(cur.text)){
-      if(next && !next.kind && explains(cur, next) && longRun(i+1) >= 3){
-        items.push({ text:cur.text.replace(/\s*:$/,'') + ' :', kind:'head' });
-      } else if(next && !next.kind && explains(cur, next)){
-        items.push({ text:joinPair(cur.text, next.text), kind:'pair' });
+      const expl = next && !next.kind && explains(cur, next);
+      if(expl && longRun(i+1) >= 3){
+        items.push({ text:asHead(cur.text), kind:'head' }); inList = false;
+      } else if(expl){
+        items.push({ text:joinPair(cur.text, next.text), kind:'pair' }); inList = false;
         i++;
-      } else if(next && !next.kind){
-        items.push({ text:cur.text.replace(/\s*:$/,'') + ' :', kind:'head' });
+      } else if(inList || (prev && /[?:]$/.test(prev.text))){
+        // Élément d'une liste annoncée par une question ou un « : » : une puce simple.
+        items.push({ text:cur.text, kind:'long' }); inList = true;
+      } else if(next && (!next.kind || next.kind === 'list')){
+        items.push({ text:asHead(cur.text), kind:'head' });
       } else if(cur.text.length >= 10){
         items.push({ text:cur.text, kind:'long' });
       }
       continue;
     }
     items.push({ text:cur.text, kind:'long' });
+    inList = /[?:]$/.test(cur.text);
   }
   return items;
 }
@@ -508,12 +566,31 @@ function getFirstBullet(slide, title){
 function getBullets(slide, title, maxB=3){
   return slideItems(slide, title).filter(i=>i.kind !== 'head').slice(0, maxB).map(i=>i.text);
 }
-function getMemoBullets(slide, title, maxB=10){
+// Mémo (option A du 30/09/2026) : 4 puces au plus par étape, et une explication de plus de
+// 150 caractères est coupée à sa première phrase (ou au dernier mot avant 150, avec « … »).
+const MEMO_MAX_PUCES = 4, MEMO_MAX_CAR = 150;
+function shorten(t){
+  if(t.length <= MEMO_MAX_CAR) return t;
+  const m = t.match(/^.{40,}?[.!?](?=\s|$)/);
+  if(m && m[0].length <= MEMO_MAX_CAR + 30) return m[0];
+  return t.slice(0, MEMO_MAX_CAR).replace(/\s+\S*$/,'') + '…';
+}
+function shortenItem(it){
+  if(it.kind !== 'pair') return shorten(it.text);
+  const i = it.text.indexOf(' : ');
+  return i < 0 ? shorten(it.text) : it.text.slice(0, i+3) + shorten(it.text.slice(i+3));
+}
+function getMemoBullets(slide, title){
   const items = slideItems(slide, title);
   // Un sous-titre n'est gardé que s'il introduit au moins une puce.
-  const kept = items.filter((it,i)=>it.kind !== 'head' || (items[i+1] && items[i+1].kind !== 'head')).slice(0, maxB);
+  const useful = items.filter((it,i)=>it.kind !== 'head' || (items[i+1] && items[i+1].kind !== 'head'));
+  const kept = []; let puces = 0;
+  for(const it of useful){
+    if(it.kind !== 'head'){ if(puces === MEMO_MAX_PUCES) break; puces++; }
+    kept.push(it);
+  }
   while(kept.length && kept[kept.length-1].kind === 'head') kept.pop();
-  return kept.map(i=>i.text);
+  return kept.map(shortenItem);
 }
 
 // Objectifs : les lignes de la slide Sommaire / Programme si elle existe,
