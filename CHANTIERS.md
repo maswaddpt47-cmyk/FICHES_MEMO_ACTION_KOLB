@@ -50,6 +50,11 @@ Aucune en attente au 30/09/2026.
 - **Versions raccourcies partie par partie** (`trimByParts`) : théorie retirée avant la
   pratique, chaque partie garde au moins une slide. Couper par la fin supprimait la partie
   « Ajouter une pièce jointe ».
+- **Fiche Kolb refusée pour un atelier 100 % pratique** (décision de l'utilisateur, 30/09/2026) :
+  sans slide d'apport pour l'étape 3, l'outil bloque avec un message (ex. « Prompt Entretien IA »,
+  que des « Etape N »). Pas de champ « notions à retenir » de remplacement.
+- **Prompts jamais coupés** : un texte « PROMPT » / « à copier » échappe à la coupe à 150
+  caractères, et ses lignes en zones séparées sous « PROMPT : » forment un seul bloc.
 - **Fiche Kolb = repères, pas contenu** (30/09/2026) : apport et application ne listent que
   les titres des slides retenues, sous l'intertitre de leur partie ; le surplus tient en une
   ligne (« N autres slides dans le support »). Le détail est dans le PPTX, la Fiche Action
