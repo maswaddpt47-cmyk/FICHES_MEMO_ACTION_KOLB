@@ -60,8 +60,9 @@ Aucune en attente au 30/09/2026.
 - **Cartouche « Pour aller plus loin »** en fin de mémo, **texte fixe** choisi par l'utilisateur
   le 30/09/2026 : « LES BONS CLICS : www.lesbonsclics.fr » et « Les parcours PIX : www.pix.fr »,
   liens cliquables (constante `PLUS_LOIN`). Ne plus le remplir depuis le PPTX.
-- **Charte** (référence : `MD-LIB/charte-graphique-cd47.md`) : bleu CD47 **`#4389BD`** (valeur
-  officielle, adoptée le 30/09/2026 ; ne pas revenir au `#078AC0` mesuré sur capture).
+- **Charte** (référence : `MD-LIB/charte-graphique-cd47.md`) : bleu CD47 **`#4389BD`**, sarcelle `#197D89`,
+  gris `#6F6F6E` (valeurs officielles, adoptées le 30/09/2026 ; ne pas revenir aux valeurs
+  mesurées sur capture).
   **Calibri** partout : choix de l'utilisateur le 30/09/2026, en connaissance de la charte
   qui préconise Verdana. Logos dans `assets/logos/` — en-tête Lot-et-Garonne / Déclic 47,
   pied de page RF-ANCT / Conseiller numérique ; la page doit être servie en HTTP pour les charger.
