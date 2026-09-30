@@ -10,7 +10,7 @@
 <style>
   :root{
     --bg:#13151a; --surface:#1b1e26; --surface-2:#22262f; --border:#2c303a;
-    --text:#eef0f4; --muted:#8a8f9c; --accent:#078ac0; --accent-2:#5eb3d2;
+    --text:#eef0f4; --muted:#8a8f9c; --accent:#4389bd; --accent-2:#5eb3d2;
     --ok:#22c55e; --warn:#f8a824; --err:#ef4444;
   }
   *{box-sizing:border-box}
@@ -22,7 +22,7 @@
   .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;margin-bottom:18px}
   .card h2{font-size:15px;margin:0 0 12px;color:var(--accent-2)}
   .drop{display:block;border:1.5px solid var(--border);border-radius:12px;padding:28px;text-align:center;cursor:pointer;transition:.15s;background:var(--surface-2)}
-  .drop:hover,.drop.drag{border-color:var(--accent);background:rgba(7,138,192,.08)}
+  .drop:hover,.drop.drag{border-color:var(--accent);background:rgba(67,137,189,.08)}
   .drop input{display:none}
   .drop .ic{font-size:30px;margin-bottom:6px}
   .drop .name{margin-top:8px;font-size:13px;color:var(--accent-2);word-break:break-all}
@@ -34,7 +34,7 @@
   .versions{display:flex;flex-direction:column;gap:8px;margin-top:14px}
   .ver-opt{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;cursor:pointer;font-size:13.5px}
   .ver-opt:hover{border-color:var(--accent)}
-  .ver-opt.sel{border-color:var(--accent);background:rgba(7,138,192,.08)}
+  .ver-opt.sel{border-color:var(--accent);background:rgba(67,137,189,.08)}
   .ver-opt input{accent-color:var(--accent)}
   .field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;font-size:13px}
   .field label{color:var(--muted)}
@@ -45,7 +45,7 @@
   .actions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
   button.gen{flex:1;min-width:200px;padding:13px 16px;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;color:#fff;transition:.15s}
   button.gen:disabled{opacity:.4;cursor:not-allowed}
-  .gen.action{background:linear-gradient(135deg,#078ac0,#5eb3d2)}
+  .gen.action{background:linear-gradient(135deg,#4389bd,#5eb3d2)}
   .gen.memo{background:linear-gradient(135deg,#187c88,#1ea0a8)}
   .gen.kolb{background:linear-gradient(135deg,#6c8f00,#a8c400)}
   button.gen:not(:disabled):hover{filter:brightness(1.1)}
@@ -567,7 +567,13 @@ function extractFiche(slidesData, slidesMeta, indices){
   return { titre, duree: minsLabel(dureeMin), objectifs, materiel: MATERIEL_DEFAULT, deroule, optionnels, conseils: CONSEILS_DEFAULT };
 }
 
+// Une slide « Pour aller plus loin » n'alimente pas le « Bon à savoir » : le mémo a son propre
+// cartouche, au texte fixe (ressources choisies par le service, 30/09/2026).
 const PLUS_LOIN_RE = /pour aller plus loin/i;
+const PLUS_LOIN = [
+  { label:'LES BONS CLICS', texte:'www.lesbonsclics.fr', url:'https://www.lesbonsclics.fr/fr/' },
+  { label:'Les parcours PIX', texte:'www.pix.fr', url:'https://www.pix.fr' },
+];
 
 function extractMemo(slidesData, slidesMeta, indices){
   const idxSet = (indices && indices.length) ? new Set(indices) : null;
@@ -594,19 +600,7 @@ function extractMemo(slidesData, slidesMeta, indices){
     if(bullets.length) bsa.push({ titre: cleanText(meta.titre), bullets });
   });
 
-  // Cartouche « Pour aller plus loin » : slide du même nom, même quand elle fait partie du
-  // bloc de clôture exclu (ressources et offre d'accompagnement du Département).
-  const plusLoin = [];
-  slidesData.forEach((slide,i)=>{
-    if(!PLUS_LOIN_RE.test(slidesMeta[i].titre)) return;
-    slide.shapes.filter(sh=>!sh.isTitle).forEach(sh=>sh.paragraphs.forEach(par=>{
-      const t = cleanText(par);
-      if(!t || isJunk(t) || PLUS_LOIN_RE.test(t)) return;
-      plusLoin.push({ text:t.replace(/\s*:$/,' :'), head:/:$/.test(t) });
-    }));
-  });
-
-  return { titre, steps, bsa, plusLoin };
+  return { titre, steps, bsa };
 }
 
 const KOLB_BUDGET = { '1h':60, '1h30':90, 'complet':null };
@@ -721,7 +715,7 @@ function suggestKolb(slidesData, slidesMeta){
 const D = window.docx;
 const FONT = 'Calibri';
 const COLORS = {
-  BLU:'078AC0', TEA:'187C88', SKY:'5EB3D2', ORG:'E67D21', YEL:'F8A824',
+  BLU:'4389BD', TEA:'187C88', SKY:'5EB3D2', ORG:'E67D21', YEL:'F8A824',
   DRK:'2B2B2B', GRY:'6E6E6D', WHT:'FFFFFF', BRN:'5D4037',
   BG_BLU:'E6F3FA', BG_TEA:'EBF7F6', BG_STP:'F8F9FD', BD_STP:'DDE6ED', BG_OPT:'FFF8EF', BG_CNS:'FFFCE7',
   BG_BSA:'FFFCE7', BG_BDA:'EBF5FF',
@@ -965,18 +959,16 @@ function buildMemo(data, logos){
     out.push(spacer(100));
   });
 
-  if(data.plusLoin.length){
-    const lignes = data.plusLoin.map(l=> l.head
-      ? para(l.text, { size:10, bold:true, color:COLORS.BRN, before:80, after:30 })
-      : para([run('> ', { size:10, color:COLORS.DRK }), run(l.text, { size:10 })], { after:20 }));
-    out.push(table([CW], [row([cell([
-      new D.Paragraph({ spacing:{ after:80 },
-        border:{ bottom:{ style:D.BorderStyle.SINGLE, size:8, color:COLORS.YEL, space:3 } },
-        children:[run('Pour aller plus loin', { size:12, bold:true, color:COLORS.BRN })] }),
-      ...lignes,
-    ], CW, { fill:COLORS.BG_BSA, borders:lineBorders(COLORS.YEL, 8) })])]));
-    out.push(spacer(140));
-  }
+  const lien = l=>new D.ExternalHyperlink({ link:l.url, children:[
+    new D.TextRun({ text:l.texte, font:FONT, size:20, color:COLORS.BLU, underline:{} })] });
+  out.push(table([CW], [row([cell([
+    new D.Paragraph({ spacing:{ after:80 },
+      border:{ bottom:{ style:D.BorderStyle.SINGLE, size:8, color:COLORS.YEL, space:3 } },
+      children:[run('Pour aller plus loin', { size:12, bold:true, color:COLORS.BRN })] }),
+    ...PLUS_LOIN.map(l=>new D.Paragraph({ spacing:{ after:30 }, children:[
+      run('> ', { size:10 }), run(`${l.label} : `, { size:10, bold:true }), lien(l)] })),
+  ], CW, { fill:COLORS.BG_BSA, borders:lineBorders(COLORS.YEL, 8) })])]));
+  out.push(spacer(140));
 
   out.push(contactBox());
   return makeDocument(out, logos, 'Mémo participant — CD47 Service Inclusion Numérique');

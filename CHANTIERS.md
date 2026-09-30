@@ -15,14 +15,7 @@ Déploiement GitHub Pages automatique à chaque push sur `main` (`.github/workfl
 
 ## Décisions à trancher
 
-Charte officielle déposée le 30/09/2026 : `MD-LIB/charte-graphique-cd47.md` (+ PDF).
-Deux écarts avec l'outil actuel :
-
-1. **Bleu des titres** : `#078AC0` (mesuré sur une capture du logo) contre **`#4389BD`**
-   dans la charte. La palette de l'outil a aussi un sarcelle `#187C88` (charte `#197D89`)
-   et un gris `#6E6E6D` (charte `#6F6F6E`). Recommandation : passer aux valeurs de la charte.
-2. **Police** : Calibri (demandée par l'utilisateur le 29/09/2026) contre **Verdana**,
-   police de la charte pour les documents administratifs. Choix à l'utilisateur.
+Aucune en attente au 30/09/2026.
 
 ## Limites connues (acceptées, pas des bugs)
 
@@ -64,12 +57,14 @@ Deux écarts avec l'outil actuel :
   « À éviter absolument » se colle à la seule première ligne et « Payer par virement »
   se lit comme un conseil). Tableaux, réels ou dessinés en zones de texte : une puce par ligne.
 - **Objectifs** repris de la slide Sommaire / Programme quand elle existe.
-- **Cartouche « Pour aller plus loin »** en fin de mémo : repris de la slide du même nom,
-  même quand elle est dans le bloc de clôture exclu ; absent si le PPTX n'a pas cette slide.
-- **Charte actuelle** : Calibri partout, titres en bleu CD47 `#078AC0` (mesuré sur le logo
-  Lot-et-Garonne) ; logos dans `assets/logos/` — en-tête Lot-et-Garonne / Déclic 47,
-  pied de page RF-ANCT / Conseiller numérique. La page doit être servie en HTTP pour les
-  charger.
+- **Cartouche « Pour aller plus loin »** en fin de mémo, **texte fixe** choisi par l'utilisateur
+  le 30/09/2026 : « LES BONS CLICS : www.lesbonsclics.fr » et « Les parcours PIX : www.pix.fr »,
+  liens cliquables (constante `PLUS_LOIN`). Ne plus le remplir depuis le PPTX.
+- **Charte** (référence : `MD-LIB/charte-graphique-cd47.md`) : bleu CD47 **`#4389BD`** (valeur
+  officielle, adoptée le 30/09/2026 ; ne pas revenir au `#078AC0` mesuré sur capture).
+  **Calibri** partout : choix de l'utilisateur le 30/09/2026, en connaissance de la charte
+  qui préconise Verdana. Logos dans `assets/logos/` — en-tête Lot-et-Garonne / Déclic 47,
+  pied de page RF-ANCT / Conseiller numérique ; la page doit être servie en HTTP pour les charger.
 - **Pas d'OCR** : décision du 29/09/2026 (gain faible, dépendance lourde).
 - `maswaddpt47-cmyk/fiches-generator` sert de **référence en lecture seule** : ne jamais
   le modifier (consigne de l'utilisateur).
