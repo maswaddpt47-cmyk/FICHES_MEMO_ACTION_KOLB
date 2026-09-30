@@ -15,7 +15,14 @@ Déploiement GitHub Pages automatique à chaque push sur `main` (`.github/workfl
 
 ## Décisions à trancher
 
-Aucune en attente au 29/09/2026.
+Charte officielle déposée le 30/09/2026 : `MD-LIB/charte-graphique-cd47.md` (+ PDF).
+Deux écarts avec l'outil actuel :
+
+1. **Bleu des titres** : `#078AC0` (mesuré sur une capture du logo) contre **`#4389BD`**
+   dans la charte. La palette de l'outil a aussi un sarcelle `#187C88` (charte `#197D89`)
+   et un gris `#6E6E6D` (charte `#6F6F6E`). Recommandation : passer aux valeurs de la charte.
+2. **Police** : Calibri (demandée par l'utilisateur le 29/09/2026) contre **Verdana**,
+   police de la charte pour les documents administratifs. Choix à l'utilisateur.
 
 ## Limites connues (acceptées, pas des bugs)
 
@@ -57,6 +64,8 @@ Aucune en attente au 29/09/2026.
   « À éviter absolument » se colle à la seule première ligne et « Payer par virement »
   se lit comme un conseil). Tableaux, réels ou dessinés en zones de texte : une puce par ligne.
 - **Objectifs** repris de la slide Sommaire / Programme quand elle existe.
+- **Cartouche « Pour aller plus loin »** en fin de mémo : repris de la slide du même nom,
+  même quand elle est dans le bloc de clôture exclu ; absent si le PPTX n'a pas cette slide.
 - **Charte actuelle** : Calibri partout, titres en bleu CD47 `#078AC0` (mesuré sur le logo
   Lot-et-Garonne) ; logos dans `assets/logos/` — en-tête Lot-et-Garonne / Déclic 47,
   pied de page RF-ANCT / Conseiller numérique. La page doit être servie en HTTP pour les
