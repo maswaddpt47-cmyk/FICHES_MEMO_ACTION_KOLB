@@ -241,7 +241,7 @@ function parseSlideXml(doc, idx){
 }
 
 // « ÉTAPE 1 SUR 3 » : compteur de progression, pas un titre.
-const COUNTER_RE = /^étape\s*(\d+)\s*(sur|\/)\s*\d+$/i;
+const COUNTER_RE = /^[éeÉE]tape\s*(\d+)\s*(sur|\/)\s*\d+$/i;
 
 function getSlideTitle(slide){
   const titleShape = slide.shapes.find(s=>s.isTitle);
@@ -269,7 +269,7 @@ function classifyRole(title, idx, hasBody){
   // Slide sans texte hors titre : séparateur de partie, pas du contenu.
   if(!hasBody) return 'section';
   // « Étape 2 : … » comme « Créer son compte Ameli - étape 1 » (mais pas « Les étapes clés »).
-  if(/(^|[\s—–-])étape\s*\d/i.test(t)) return 'etape';
+  if(/(^|[\s—–-])[éeÉE]tape\s*\d/i.test(t)) return 'etape';
   if(['chapitre','partie','module'].some(w=>t.includes(w))) return 'chapitre';
   if(['démo','demo','pratique','exercice','manipulation','tutoriel'].some(w=>t.includes(w))) return 'demo';
   if(['pour aller plus loin','ressource','bilan','conclusion','récap','merci','questions fréquentes'].some(w=>t.includes(w))) return 'conclusion';
@@ -476,6 +476,7 @@ function slideItems(slide, title){
 
   const raw = [];
   let processDone = new Set();
+  let prompt = null;
   for(const s of slide.shapes){
     if(s.isTitle) continue;
     if(processShapes.has(s)){
@@ -510,6 +511,17 @@ function slideItems(slide, title){
       if(last >= 0 && !/[.!?:;]$/.test(paras[last]) && /^[a-zà-ÿ]/.test(t)) paras[last] += ' ' + t;
       else paras.push(t);
     });
+    // Un prompt reste d'un seul bloc : il se copie tel quel dans l'IA. Ses lignes peuvent être
+    // des zones séparées, empilées sous « PROMPT : » dans la même colonne, jusqu'à la prochaine
+    // « Instruction » ou « PROMPT ».
+    if(paras.length && /^prompt\b/i.test(paras[0])){
+      prompt = { text: paras.join(' '), kind:'row', x: s.x };
+      raw.push(prompt); continue;
+    }
+    if(prompt && paras.length && s.x !== null && Math.abs(s.x - prompt.x) <= 108000 && !/^(instruction|prompt)\b/i.test(paras[0])){
+      prompt.text += ' ' + paras.join(' '); continue;
+    }
+    prompt = null;
     // Deux paragraphes dans la même zone = un intitulé et son explication ;
     // trois ou plus = une liste : une puce par ligne, sans appariement.
     if(paras.length === 2 && paras[0].length <= 60 && !/\.$/.test(paras[0])){
@@ -575,7 +587,10 @@ function shorten(t){
   if(m && m[0].length <= MEMO_MAX_CAR + 30) return m[0];
   return t.slice(0, MEMO_MAX_CAR).replace(/\s+\S*$/,'') + '…';
 }
+// Un prompt (ou tout texte présenté comme à copier) se reproduit mot pour mot : jamais coupé.
+const A_COPIER_RE = /\bprompts?\b|\bcopi(er|ez)\b/i;
 function shortenItem(it){
+  if(A_COPIER_RE.test(it.text)) return it.text;
   if(it.kind !== 'pair') return shorten(it.text);
   const i = it.text.indexOf(' : ');
   return i < 0 ? shorten(it.text) : it.text.slice(0, i+3) + shorten(it.text.slice(i+3));
