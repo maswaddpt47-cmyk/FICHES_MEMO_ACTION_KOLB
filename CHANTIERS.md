@@ -1,6 +1,6 @@
 # CHANTIERS — Générateur de fiches Action, Mémo et Kolb
 
-État au **29/09/2026** — commit de référence `8a2ba30` (branche `main`, déployé).
+État au **30/09/2026** — commit de référence : voir `git log -1 main` (branche `main`, déployé).
 
 Outil : `fichegenerator.html`, en ligne sur
 https://maswaddpt47-cmyk.github.io/FICHES_MEMO_ACTION_KOLB/fichegenerator.html
@@ -38,6 +38,11 @@ Aucune en attente au 29/09/2026.
   d'atelier (l'utilisateur en a déposé trois par erreur le 29/09/2026).
 - **Aucun contenu inventé** : pas d'étape « Contenu à compléter », pas de texte de repli
   pour l'étape 3 Kolb ; si le PPTX ne fournit rien, l'outil bloque avec un message.
+  Seule exception, voulue par l'utilisateur le 30/09/2026 : les champs Kolb (étapes 1, 2
+  et consigne d'application) sont **pré-remplis par règles** à partir du titre et des
+  parties du PPTX (`suggestKolb`), modifiables ; un champ modifié par l'animateur n'est
+  jamais écrasé, sauf clic sur « Reprendre les suggestions du PPTX ». Pas d'IA : page
+  statique sans serveur.
 - **Slides « Étape N : … »** = pratique (5 min), dans le Mémo et en étape 4 Kolb.
   « ÉTAPE 1 SUR 3 » est un compteur, jamais un titre.
 - **Slide sans texte hors titre** = séparateur de partie : bandeau dans le déroulé,

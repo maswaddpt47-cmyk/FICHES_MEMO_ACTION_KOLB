@@ -39,7 +39,7 @@
   .field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;font-size:13px}
   .field label{color:var(--muted)}
   .field textarea,.field input{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font:inherit;font-size:13.5px}
-  .field textarea{min-height:64px;resize:vertical}
+  .field textarea{min-height:120px;resize:vertical}
   .row2{display:grid;grid-template-columns:1fr 110px;gap:10px;align-items:end}
   .kolb-step{border-left:3px solid var(--accent);padding-left:12px;margin-bottom:14px}
   .actions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
@@ -94,10 +94,12 @@
     <h2>3. Fiche Kolb — ce que le PPTX ne dit pas</h2>
     <div class="hint" style="margin:0 0 14px">
       Le PPTX alimente l'apport (étape 3) et les exercices (étape 4).
-      La mise en situation et le retour collectif relèvent de l'animateur : à saisir ici.
+      La mise en situation et le retour collectif relèvent de l'animateur : les champs sont
+      <b>pré-remplis à partir du titre et des parties du PPTX</b>, à adapter à ton groupe.
       Utilisé uniquement pour la Fiche Kolb. En version 1h ou 1h30, la fiche Kolb tient dans cette durée :
       les slides qui ne rentrent pas sont listées « si le temps le permet ».
     </div>
+    <button type="button" id="k-reset" class="ver-opt" style="margin:0 0 14px;background:none;color:var(--text);font:inherit;font-size:13px">↺ Reprendre les suggestions du PPTX</button>
     <div class="kolb-step">
       <div class="row2">
         <div class="field"><label for="k-exp">Étape 1 — Mise en situation : consigne donnée aux participants (obligatoire)</label>
@@ -660,6 +662,44 @@ function extractKolb(slidesData, slidesMeta, versionKey, form){
   };
 }
 
+// Suggestions pour le formulaire Kolb, construites par règles à partir du PPTX (titre,
+// parties, présence de pas-à-pas) : un point de départ que l'animateur adapte, jamais
+// un contenu présenté comme issu du PPTX.
+function versVous(t){
+  return t.replace(/^se /i,'vous ').replace(/^s'/i,'vous ')
+    .replace(/\bses\b/g,'vos').replace(/\bson\b/g,'votre').replace(/\bsa\b/g,'votre').replace(/\bsoi\b/g,'vous');
+}
+function suggestKolb(slidesData, slidesMeta){
+  const titre = cleanText(getSlideTitle(slidesData[0]));
+  const premier = titre.split(/\s+/)[0] || '';
+  const infinitif = /(er|ir|re)$/i.test(premier) && !/^(le|la|les|une?|des)$/i.test(premier);
+  const action = versVous(titre.charAt(0).toLowerCase() + titre.slice(1));
+  const parties = [...new Set(slidesMeta.filter(m=>m.partTitre && m.role !== 'hors_contenu').map(m=>m.partTitre))];
+  const reperes = parties.length >= 2 ? parties : getObjectifs(slidesData, slidesMeta);
+  const pratique = slidesMeta.some(m=>PRATIQUE.has(m.role));
+
+  const exp = infinitif
+    ? `Sans explication préalable, essayez seul ou à deux de ${action}. Faites comme vous le feriez chez vous et notez sur papier les moments où vous hésitez : on en parlera ensuite.`
+    : `Sans explication préalable, par deux, faites le point sur « ${titre} » : ce que vous savez déjà, ce que vous avez déjà essayé, ce qui vous pose problème. Notez-le sur papier.`;
+
+  const obs = [
+    "Qu'avez-vous réussi à faire ? Qu'est-ce qui vous a aidé ?",
+    'À quel moment avez-vous hésité ou bloqué ?',
+    ...(reperes.length >= 2 ? [`Sur quel point avez-vous eu le plus de mal : ${reperes.slice(0,5).join(' / ')} ?`] : []),
+    "Qu'avez-vous découvert que vous ne saviez pas ?",
+    'Que feriez-vous différemment la prochaine fois ?',
+  ].join('\n');
+
+  const app = pratique
+    ? (infinitif
+        ? `Refaites seul, dans une situation différente, en suivant la méthode vue ensemble : ${action}. Vérifiez vous-même le résultat avant d'appeler l'animateur.`
+        : 'Refaites seul, dans une situation différente, en suivant la méthode vue ensemble. Vérifiez vous-même le résultat avant d\'appeler l\'animateur.')
+    : (infinitif
+        ? `Appliquez seul ce que vous venez de voir sur un nouveau cas : ${action}.`
+        : `Appliquez seul ce que vous venez de voir sur un nouveau cas, en lien avec « ${titre} ».`);
+  return { exp, obs, app };
+}
+
 /* ════════════════════════════════════════════════════════════
    4. CONSTRUCTION DES DOCX (bibliothèque docx)
    ════════════════════════════════════════════════════════════ */
@@ -1139,6 +1179,20 @@ function renderGabarit(){
     `Exclure le bloc gabarit du Département (slides 2 à 4 et 2 dernières) — ${state.gabaritDetecte ? 'détecté dans ce PPTX' : 'non détecté dans ce PPTX'}`;
 }
 
+// Un champ est remplacé seulement s'il est vide ou encore égal à la suggestion précédente :
+// ce que l'animateur a tapé n'est jamais écrasé, sauf s'il demande « Reprendre les suggestions ».
+const KOLB_FIELDS = { exp:'k-exp', obs:'k-obs', app:'k-app' };
+let lastSuggest = { exp:'', obs:document.getElementById('k-obs').value, app:'' };
+function applyKolbSuggestions(force){
+  const sug = suggestKolb(state.slidesData, state.meta);
+  Object.entries(KOLB_FIELDS).forEach(([k,id])=>{
+    const el = document.getElementById(id);
+    if(force || !el.value.trim() || el.value === lastSuggest[k]) el.value = sug[k];
+  });
+  lastSuggest = sug;
+}
+document.getElementById('k-reset').addEventListener('click', ()=>{ if(state.slidesData) applyKolbSuggestions(true); });
+
 function renderSummary(){
   const titre = getSlideTitle(state.slidesData[0]) || '(sans titre)';
   document.getElementById('sum-titre').textContent = titre;
@@ -1160,6 +1214,7 @@ function renderSummary(){
   });
 
   [summaryCard, kolbCard, genCard].forEach(c=>c.classList.add('show'));
+  applyKolbSuggestions(false);
   setButtons(true);
 }
 
