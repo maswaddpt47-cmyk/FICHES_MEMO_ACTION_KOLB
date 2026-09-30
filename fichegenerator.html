@@ -378,7 +378,7 @@ function analyzeSlides(slidesData, excludeGabarit){
    ════════════════════════════════════════════════════════════ */
 
 function cleanText(text){
-  return (text || '').replace(/[^\x00-\x7FÀ-ɏ‘’“”–—«»€…°]/g, '').replace(/\s+/g,' ').trim();
+  return (text || '').replace(/\u00a0/g,' ').replace(/[^\x00-\x7FÀ-ɏ‘’“”–—«»€…°]/g, '').replace(/\s+/g,' ').trim();
 }
 function trunc(t, n){ return t.length > n ? t.slice(0,n) + '…' : t; }
 function normLoose(t){ return (t||'').replace(/[^a-zA-Z0-9À-ɏ_\s]/g,'').toLowerCase().trim(); }
@@ -567,6 +567,8 @@ function extractFiche(slidesData, slidesMeta, indices){
   return { titre, duree: minsLabel(dureeMin), objectifs, materiel: MATERIEL_DEFAULT, deroule, optionnels, conseils: CONSEILS_DEFAULT };
 }
 
+const PLUS_LOIN_RE = /pour aller plus loin/i;
+
 function extractMemo(slidesData, slidesMeta, indices){
   const idxSet = (indices && indices.length) ? new Set(indices) : null;
   const rolesSteps = new Set(['contenu','demo','etape']);
@@ -585,14 +587,26 @@ function extractMemo(slidesData, slidesMeta, indices){
 
   const bsa = [];
   slidesMeta.forEach((meta,i)=>{
-    if(!meta.optionnel) return;
+    if(!meta.optionnel || PLUS_LOIN_RE.test(meta.titre)) return;
     if(['titre','chapitre','section','hors_contenu'].includes(meta.role)) return;
     if(idxSet && idxSet.has(meta.n)) return;
     const bullets = getMemoBullets(slidesData[i], meta.titre);
     if(bullets.length) bsa.push({ titre: cleanText(meta.titre), bullets });
   });
 
-  return { titre, steps, bsa };
+  // Cartouche « Pour aller plus loin » : slide du même nom, même quand elle fait partie du
+  // bloc de clôture exclu (ressources et offre d'accompagnement du Département).
+  const plusLoin = [];
+  slidesData.forEach((slide,i)=>{
+    if(!PLUS_LOIN_RE.test(slidesMeta[i].titre)) return;
+    slide.shapes.filter(sh=>!sh.isTitle).forEach(sh=>sh.paragraphs.forEach(par=>{
+      const t = cleanText(par);
+      if(!t || isJunk(t) || PLUS_LOIN_RE.test(t)) return;
+      plusLoin.push({ text:t.replace(/\s*:$/,' :'), head:/:$/.test(t) });
+    }));
+  });
+
+  return { titre, steps, bsa, plusLoin };
 }
 
 const KOLB_BUDGET = { '1h':60, '1h30':90, 'complet':null };
@@ -950,6 +964,19 @@ function buildMemo(data, logos){
     ], CW, { fill:COLORS.BG_BSA, borders:lineBorders(COLORS.YEL, 8) })])]));
     out.push(spacer(100));
   });
+
+  if(data.plusLoin.length){
+    const lignes = data.plusLoin.map(l=> l.head
+      ? para(l.text, { size:10, bold:true, color:COLORS.BRN, before:80, after:30 })
+      : para([run('> ', { size:10, color:COLORS.DRK }), run(l.text, { size:10 })], { after:20 }));
+    out.push(table([CW], [row([cell([
+      new D.Paragraph({ spacing:{ after:80 },
+        border:{ bottom:{ style:D.BorderStyle.SINGLE, size:8, color:COLORS.YEL, space:3 } },
+        children:[run('Pour aller plus loin', { size:12, bold:true, color:COLORS.BRN })] }),
+      ...lignes,
+    ], CW, { fill:COLORS.BG_BSA, borders:lineBorders(COLORS.YEL, 8) })])]));
+    out.push(spacer(140));
+  }
 
   out.push(contactBox());
   return makeDocument(out, logos, 'Mémo participant — CD47 Service Inclusion Numérique');
