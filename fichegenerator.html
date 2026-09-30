@@ -617,7 +617,7 @@ function extractKolb(slidesData, slidesMeta, versionKey, form){
   const pairs = slidesData.map((s,i)=>[s, slidesMeta[i]])
     .filter(([,m])=> !m.optionnel && ['contenu','chapitre','demo','etape'].includes(m.role));
 
-  const toItem = ([slide, meta])=>({ titre: cleanText(meta.titre), bullets: getBullets(slide, meta.titre, 2), partie: meta.partTitre });
+  const toItem = ([, meta])=>({ titre: cleanText(meta.titre), partie: meta.partTitre });
   // Le surplus est regroupé par partie : « Étape 2 » ou « Conseils et erreurs à éviter » existent dans plusieurs parties.
   const nomReste = ([,m])=>({ partie: m.partTitre, titre: cleanText(m.titre) });
   const apportPairs = pairs.filter(([,m])=>!PRATIQUE.has(m.role));
@@ -1053,17 +1053,13 @@ function buildKolb(data, logos){
           partie = s.partie;
           activite.push(para(partie.toUpperCase(), { size:9, bold:true, color:COLORS.BLU, before:activite.length ? 80 : 0, after:30 }));
         }
-        activite.push(para(s.titre, { size:10, bold:true, after:20 }));
-        s.bullets.forEach(b=>activite.push(arrow(b, { size:9.5 })));
+        // Fiche d'animation : repères seulement (titres), le détail est dans le support et le mémo.
+        activite.push(arrow(s.titre, { size:10 }));
       });
       if(p.reste && p.reste.length){
-        activite.push(para('Si le temps le permet :', { size:9.5, italic:true, bold:true, color:COLORS.GRY, before:60, after:20 }));
-        const groupes = [];
-        p.reste.forEach(r=>{
-          const g = groupes[groupes.length-1];
-          if(g && g.partie === r.partie) g.titres.push(r.titre); else groupes.push({ partie:r.partie, titres:[r.titre] });
-        });
-        groupes.forEach(g=>activite.push(para(`${g.partie ? g.partie + ' : ' : ''}${g.titres.join(' · ')}`, { size:9.5, italic:true, color:COLORS.GRY, after:20 })));
+        const n = p.reste.length;
+        activite.push(para(`Si le temps le permet : ${n} autre${n > 1 ? 's' : ''} slide${n > 1 ? 's' : ''} dans le support (voir la Fiche Action).`,
+          { size:9.5, italic:true, color:COLORS.GRY, before:60, after:0 }));
       }
       return row([
         cell([para(p.heure, { bold:true, size:10, after:0 })], wd[0]),

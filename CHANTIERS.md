@@ -50,6 +50,10 @@ Aucune en attente au 30/09/2026.
 - **Versions raccourcies partie par partie** (`trimByParts`) : théorie retirée avant la
   pratique, chaque partie garde au moins une slide. Couper par la fin supprimait la partie
   « Ajouter une pièce jointe ».
+- **Fiche Kolb = repères, pas contenu** (30/09/2026) : apport et application ne listent que
+  les titres des slides retenues, sous l'intertitre de leur partie ; le surplus tient en une
+  ligne (« N autres slides dans le support »). Le détail est dans le PPTX, la Fiche Action
+  et le mémo.
 - **Mémo toujours complet**, quelle que soit la version (`-memo-complet.docx`) : c'est le
   document que le participant garde.
 - **Puces** : intitulé court + explication = une puce « Intitulé : explication » ; un
