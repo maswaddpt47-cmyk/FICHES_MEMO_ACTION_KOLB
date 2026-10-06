@@ -19,6 +19,15 @@ pour les Conseillers Numériques du CD47.
   GitHub Actions (conclusion `success`) sur le commit poussé.
 - `maswaddpt47-cmyk/fiches-generator` : référence en lecture seule, ne jamais le modifier.
 
+## Regard extérieur — Codex (06/10/2026)
+
+Pas d'AGORA ici : une décision qui touche à la sécurité ou aux données
+personnelles est soumise à **Codex** (OpenAI, autorisations « Lecture seule »)
+avant d'être codée ; l'utilisateur tranche. **Audit Codex** chaque trimestre et
+après tout changement structurant de sécurité, avec le modèle MD-LIB
+`consigne-audit-externe.md` ; chaque point vérifié dans le code avant d'être
+retenu. Codex ne modifie jamais le code. Règle complète : MD-LIB `agora.md` §12.
+
 ## Échanges
 
 Répondre en français, tutoiement, réponses concises.
