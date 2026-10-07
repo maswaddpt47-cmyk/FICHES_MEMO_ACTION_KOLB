@@ -1,6 +1,6 @@
 # Générateur de fiches Action, Mémo et Kolb — CD47
 
-Outil autonome (HTML/JS, sans serveur) : `fichegenerator.html`.
+Outil autonome (HTML/JS, sans serveur) : `index.html`.
 
 À partir d'un PPTX d'atelier, génère au format Word (.docx) :
 

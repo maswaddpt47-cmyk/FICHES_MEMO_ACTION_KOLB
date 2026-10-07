@@ -5,7 +5,7 @@ pas défaire).
 
 ## Le projet
 
-Générateur client-side (`fichegenerator.html`, HTML/JS sans serveur) : à partir d'un PPTX
+Générateur client-side (`index.html`, HTML/JS sans serveur) : à partir d'un PPTX
 d'atelier, produit en Word une Fiche Action, un Mémo participant et une Fiche action Kolb,
 pour les Conseillers Numériques du CD47.
 

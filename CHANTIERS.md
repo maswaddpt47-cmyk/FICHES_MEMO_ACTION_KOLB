@@ -2,8 +2,8 @@
 
 État au **30/09/2026** — commit de référence : voir `git log -1 main` (branche `main`, déployé).
 
-Outil : `fichegenerator.html`, en ligne sur
-https://maswaddpt47-cmyk.github.io/FICHES_MEMO_ACTION_KOLB/fichegenerator.html
+Outil : `index.html`, en ligne sur
+https://maswaddpt47-cmyk.github.io/FICHES_MEMO_ACTION_KOLB/
 Déploiement GitHub Pages automatique à chaque push sur `main` (`.github/workflows/deploy.yml`).
 
 ## Chantier en cours
