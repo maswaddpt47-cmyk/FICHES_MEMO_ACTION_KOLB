@@ -57,3 +57,8 @@ Ne rien déclarer « testé » ou « réparé » sans l'avoir exécuté. « Vali
 pour ce que l'utilisateur a nommé. Rendu pur : pas de test, mais le mesurer (débordement,
 contraste) à 390 px et 1280x720 avant de livrer ; la fonction nouvelle se montre là où il
 teste et la réponse dit **où cliquer** en premier (MD-LIB `collaboration.md`, règles 2 et 17).
+Avant de décrire un correctif, suivre la valeur sur **tout son chemin** (`then`/`catch`,
+appelants, valeurs par défaut), pas la seule ligne à changer. Un nombre annoncé se
+**compte par une commande**, pas à l'œil sur une liste. Un fichier partagé entre sessions
+(`AGORA.md`, `CHANTIERS.md`, `CLAUDE.md`) se **relit juste avant de rédiger**, pas
+seulement à l'ouverture (règles 27, 29 et 30, 17/10/2026).
