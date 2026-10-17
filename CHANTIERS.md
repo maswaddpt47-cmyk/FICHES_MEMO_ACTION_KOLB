@@ -93,3 +93,5 @@ Chromium (Playwright, librairies CDN servies depuis des copies locales car jsdel
 bloqué dans l'environnement cloud), générer les trois documents sur les PPTX réels
 fournis par l'utilisateur, puis contrôler les .docx (python-docx, `validate.py` du skill
 docx, rendu LibreOffice). Les PPTX de test ne sont pas dans le dépôt : les redemander.
+
+- AGORA installée le 17/10/2026 (`AGORA.md`, section « AGORA » de `CLAUDE.md`) : chaque décision à trancher est candidate à un bloc.
