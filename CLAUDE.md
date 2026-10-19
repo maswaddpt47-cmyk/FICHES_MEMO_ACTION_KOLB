@@ -62,3 +62,8 @@ appelants, valeurs par défaut), pas la seule ligne à changer. Un nombre annonc
 **compte par une commande**, pas à l'œil sur une liste. Un fichier partagé entre sessions
 (`AGORA.md`, `CHANTIERS.md`, `CLAUDE.md`) se **relit juste avant de rédiger**, pas
 seulement à l'ouverture (règles 27, 29 et 30, 17/10/2026).
+**L'utilisateur décide, Claude propose** : toute déviation d'une consigne, tout choix de
+garder, retirer ou remplacer un élément demandé se demande **avant** d'être fait ;
+l'utilisateur a le dernier mot, jamais d'« écart assumé » tranché seul. Au changement de
+session annoncé : relever les règles de collaboration nées pendant la session et absentes
+des `.md`, les présenter, puis les inscrire (règles 4 et 32, 19/10/2026).
