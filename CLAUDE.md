@@ -62,6 +62,11 @@ appelants, valeurs par défaut), pas la seule ligne à changer. Un nombre annonc
 **compte par une commande**, pas à l'œil sur une liste. Un fichier partagé entre sessions
 (`AGORA.md`, `CHANTIERS.md`, `CLAUDE.md`) se **relit juste avant de rédiger**, pas
 seulement à l'ouverture (règles 27, 29 et 30, 17/10/2026).
+Un comportement qui change **emporte ses textes** : dans la même livraison, corriger tous
+les textes visibles qui décrivent l'ancien comportement (aide, annonces, messages), ou les
+signaler. Une capture envoyée pour valider un point **se lit en entier** : toute incohérence
+visible ailleurs se signale, en hypothèse, sans corriger d'office. Toute heure donnée est
+en **heure de Paris** (GitHub et les API affichent l'UTC) (règles 8bis, 23 et 24, 20/10/2026).
 **L'utilisateur décide, Claude propose** : toute déviation d'une consigne, tout choix de
 garder, retirer ou remplacer un élément demandé se demande **avant** d'être fait ;
 l'utilisateur a le dernier mot, jamais d'« écart assumé » tranché seul. Au changement de
