@@ -95,3 +95,10 @@ fournis par l'utilisateur, puis contrôler les .docx (python-docx, `validate.py`
 docx, rendu LibreOffice). Les PPTX de test ne sont pas dans le dépôt : les redemander.
 
 - AGORA installée le 17/10/2026 (`AGORA.md`, section « AGORA » de `CLAUDE.md`) : chaque décision à trancher est candidate à un bloc.
+
+## Pistes d'amélioration
+
+Consigne renforcée et propagation approuvée par l'utilisateur le 25/10/2026 :
+initiative dès l'analyse, recommandations argumentées et examen de la pertinence
+de l'existant. Règle 22 de MD-LIB copiée dans `CLAUDE.md` ; ce registre garde
+les pistes et les décisions, sans reproposer une piste écartée sans fait nouveau.
