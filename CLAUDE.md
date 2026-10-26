@@ -92,3 +92,9 @@ garder, retirer ou remplacer un élément demandé se demande **avant** d'être 
 l'utilisateur a le dernier mot, jamais d'« écart assumé » tranché seul. Au changement de
 session annoncé : relever les règles de collaboration nées pendant la session et absentes
 des `.md`, les présenter, puis les inscrire (règles 4 et 32, 19/10/2026).
+**Compte rendu** : recouper échanges, pièces jointes et documents avant de le finaliser ;
+distinguer faits vérifiés, confirmations de tiers, déclarations de l'utilisateur et
+inconnus ; attribuer chaque apport d'après la source (`AGORA.md`, commits), jamais de
+mémoire, sans minimiser le contradicteur. Une tâche programmée n'est une surveillance
+qu'après **comptage de ses passages réels** ; un **moyen d'arrêt** (annulation, coupure)
+s'essaie en réel avant d'être annoncé (règles 34 à 37, 21-22/10/2026).
