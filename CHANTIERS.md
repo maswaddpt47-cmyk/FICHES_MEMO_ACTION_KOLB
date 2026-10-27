@@ -1,6 +1,6 @@
 # CHANTIERS — Générateur de fiches Action, Mémo et Kolb
 
-État au **30/09/2026** — commit de référence : voir `git log -1 main` (branche `main`, déployé).
+État au **27/10/2026** — commit de référence : voir `git log -1 main` (branche `main`, déployé).
 
 Outil : `index.html`, en ligne sur
 https://maswaddpt47-cmyk.github.io/FICHES_MEMO_ACTION_KOLB/
@@ -11,11 +11,12 @@ Déploiement GitHub Pages automatique à chaque push sur `main` (`.github/workfl
 1. **Ajustements de présentation et de charte graphique** — annoncés par l'utilisateur
    pour le 30/09/2026, après relecture au bureau. Contenu pas encore précisé : attendre
    ses retours (codes couleur exacts, polices, règles d'usage des logos, captures
-   annotées) avant de toucher à la mise en page.
+   annotées) avant de toucher à la mise en page. **Aucun retour reçu au 27/10/2026**
+   (aucun commit de présentation depuis) : demander à l'utilisateur s'il tient toujours.
 
 ## Décisions à trancher
 
-Aucune en attente au 30/09/2026.
+Aucune en attente au 27/10/2026.
 
 ## Limites connues (acceptées, pas des bugs)
 
@@ -94,11 +95,7 @@ bloqué dans l'environnement cloud), générer les trois documents sur les PPTX 
 fournis par l'utilisateur, puis contrôler les .docx (python-docx, `validate.py` du skill
 docx, rendu LibreOffice). Les PPTX de test ne sont pas dans le dépôt : les redemander.
 
-- AGORA installée le 17/10/2026 (`AGORA.md`, section « AGORA » de `CLAUDE.md`) : chaque décision à trancher est candidate à un bloc.
-
 ## Pistes d'amélioration
 
-Consigne renforcée et propagation approuvée par l'utilisateur le 25/10/2026 :
-initiative dès l'analyse, recommandations argumentées et examen de la pertinence
-de l'existant. Règle 22 de MD-LIB copiée dans `CLAUDE.md` ; ce registre garde
-les pistes et les décisions, sans reproposer une piste écartée sans fait nouveau.
+Règle dans `CLAUDE.md` (« Propositions d'amélioration et de nouveautés »).
+Proposées, en attente : aucune. Écartées : aucune (27/10/2026).
