@@ -98,3 +98,6 @@ inconnus ; attribuer chaque apport d'après la source (`AGORA.md`, commits), jam
 mémoire, sans minimiser le contradicteur. Une tâche programmée n'est une surveillance
 qu'après **comptage de ses passages réels** ; un **moyen d'arrêt** (annulation, coupure)
 s'essaie en réel avant d'être annoncé (règles 34 à 37, 21-22/10/2026).
+Vérifier l'**élément exact** nommé par l'utilisateur, pas un élément voisin supposé
+équivalent (un badge et la tuile qu'il résume) : une règle CSS plus spécifique peut
+écraser l'un sans toucher l'autre (règle 38, 20/10/2026).
