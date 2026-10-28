@@ -101,3 +101,8 @@ s'essaie en réel avant d'être annoncé (règles 34 à 37, 21-22/10/2026).
 Vérifier l'**élément exact** nommé par l'utilisateur, pas un élément voisin supposé
 équivalent (un badge et la tuile qu'il résume) : une règle CSS plus spécifique peut
 écraser l'un sans toucher l'autre (règle 38, 20/10/2026).
+Ne jamais chaîner un commit derrière un `git pull` avec `&&` ; relire
+`git log --oneline -2` après le push. Un inventaire de ce qui existe ne prouve pas ce qui est
+**impossible** : écrire ce qui a été vérifié et comment. Faire décrire l'environnement
+(**comment le fichier s'ouvre**) avant d'en analyser les contraintes. Avant un document
+de plus, demander s'il **remplace** ou s'ajoute (règles 43 à 46, 27/10/2026).
