@@ -1,6 +1,6 @@
 # CHANTIERS — Générateur de fiches Action, Mémo et Kolb
 
-État au **27/10/2026** — commit de référence : voir `git log -1 main` (branche `main`, déployé).
+État au **28/10/2026** — commit de référence : voir `git log -1 main` (branche `main`, déployé).
 
 Outil : `index.html`, en ligne sur
 https://maswaddpt47-cmyk.github.io/FICHES_MEMO_ACTION_KOLB/
@@ -8,11 +8,8 @@ Déploiement GitHub Pages automatique à chaque push sur `main` (`.github/workfl
 
 ## Chantier en cours
 
-1. **Ajustements de présentation et de charte graphique** — annoncés par l'utilisateur
-   pour le 30/09/2026, après relecture au bureau. Contenu pas encore précisé : attendre
-   ses retours (codes couleur exacts, polices, règles d'usage des logos, captures
-   annotées) avant de toucher à la mise en page. **Aucun retour reçu au 27/10/2026**
-   (aucun commit de présentation depuis) : demander à l'utilisateur s'il tient toujours.
+Aucun au 28/10/2026 (chantier « ajustements de présentation » clos par l'utilisateur le
+28/10/2026, sans retour depuis le 30/09).
 
 ## Décisions à trancher
 
