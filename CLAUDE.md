@@ -92,6 +92,10 @@ garder, retirer ou remplacer un élément demandé se demande **avant** d'être 
 l'utilisateur a le dernier mot, jamais d'« écart assumé » tranché seul. Au changement de
 session annoncé : relever les règles de collaboration nées pendant la session et absentes
 des `.md`, les présenter, puis les inscrire (règles 4 et 32, 19/10/2026).
+Pas plus de **60 secondes sans nouvelles** pendant une tâche : un point utile (acquis,
+obstacle, prochaine action) au moins toutes les minutes. Une **attente longue** (CI,
+déploiement) se fait **en arrière-plan**, la main rendue à l'utilisateur : annoncer la
+durée, surveiller en arrière-plan, revenir quand c'est fini (règles 51 et 52, 19/10/2026).
 **Compte rendu** : recouper échanges, pièces jointes et documents avant de le finaliser ;
 distinguer faits vérifiés, confirmations de tiers, déclarations de l'utilisateur et
 inconnus ; attribuer chaque apport d'après la source (`AGORA.md`, commits), jamais de
