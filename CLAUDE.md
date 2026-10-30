@@ -86,7 +86,9 @@ Un comportement qui change **emporte ses textes** : dans la même livraison, cor
 les textes visibles qui décrivent l'ancien comportement (aide, annonces, messages), ou les
 signaler. Une capture envoyée pour valider un point **se lit en entier** : toute incohérence
 visible ailleurs se signale, en hypothèse, sans corriger d'office. Toute heure donnée est
-en **heure de Paris** (GitHub et les API affichent l'UTC) (règles 8bis, 23 et 24, 20/10/2026).
+en **heure de Paris** (GitHub et les API affichent l'UTC), convertie **par commande**
+(`TZ=Europe/Paris date`), jamais de tête (règles 8bis, 23 et 24, 20/10/2026 ; conversion par
+commande depuis le 30/10/2026 : +2 h écrit au lieu de +1 h après le passage à l'heure d'hiver).
 **L'utilisateur décide, Claude propose** : toute déviation d'une consigne, tout choix de
 garder, retirer ou remplacer un élément demandé se demande **avant** d'être fait ;
 l'utilisateur a le dernier mot, jamais d'« écart assumé » tranché seul. Au changement de
@@ -110,3 +112,7 @@ Ne jamais chaîner un commit derrière un `git pull` avec `&&` ; relire
 **impossible** : écrire ce qui a été vérifié et comment. Faire décrire l'environnement
 (**comment le fichier s'ouvre**) avant d'en analyser les contraintes. Avant un document
 de plus, demander s'il **remplace** ou s'ajoute (règles 43 à 46, 27/10/2026).
+Après des modifications faites **hors session** (à la main ou avec un autre outil), « pull »
+suffit : `git pull`, lire `git log` et le diff arrivés depuis la base notée en tête de
+`CHANTIERS.md`, puis mettre ce fichier à jour (en-tête compris) avant toute autre tâche ;
+l'utilisateur dit en une ligne ce qui reste hors dépôt (règle 56, 30/10/2026).
